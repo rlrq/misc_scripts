@@ -11,7 +11,7 @@ class IndexedFile:
         with open(self.filename, 'r') as f:
             for line in f:
                 if self.skip(line): continue
-                else: yield
+                else: yield line
     def index(self, chunk_lines = None):
         if chunk_lines is not None:
             self.chunk_lines = chunk_lines

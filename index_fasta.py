@@ -1,4 +1,5 @@
 from Bio import Seq
+from pyfaidx import Fasta
 
 
 ## basically pyfaidx.Fasta class, but returns Bio.Seq.Seq item when sliced and filename for __repr__
@@ -11,7 +12,7 @@ class IndexedFasta(Fasta):
         else:
             super().__init__(fasta, *args, **kwargs)
     def __repr__(self):
-        return self.filename
+        return f"IndexedFasta({self.filename})"
     def get_seq(self, *args, **kwargs):
         pyfaidx_seq = super().get_seq(*args, **kwargs)
         return Seq.Seq(pyfaidx_seq.seq)
