@@ -53,3 +53,9 @@ def get_recursively(d, default, *keys):
         else:
             return default
     return helper(d, keys)
+
+def invert_dict(d):
+    invd = {}
+    for k, v in d.items():
+        invd[v] = invd.get(v, []) + [k]
+    return invd

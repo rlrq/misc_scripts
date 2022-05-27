@@ -44,13 +44,11 @@ def parse_attr_mod_sdict(s: str, attr_sep: str = ',', feature_sep: str = ';', fa
     return {feature: parse_attr_mod(mappings) for feature, mappings in feature_dict.items()}
 
 def append_geneID(gff_bed_path, fout, names_col=-1, get_unique=True):
-
     """
     :param gff_bed_path: path to bed formatted gff file
     :names_col: column from which to extract gene ID
     """
     gff = [] # list to store all gffs
-
     with open(gff_bed_path, "r") as f:
         lines = f.readlines()
         print(len(lines))
@@ -64,7 +62,6 @@ def append_geneID(gff_bed_path, fout, names_col=-1, get_unique=True):
                 # use if appending gene ID to row
                 # temp.append(geneID[0])
                 gff.append('\t'.join(temp))
-
     # write features to file
     import os
     f = open(fout, "w+")
@@ -75,29 +72,24 @@ def append_geneID(gff_bed_path, fout, names_col=-1, get_unique=True):
         os.system("sort -u {} | bedtools sort -i - > temp.txt; mv temp.txt {}".format(fout, fout))
     else:
         os.system("bedtools sort -i {} > temp.txt; mv temp.txt {}".format(fout, fout))
-
     return 0
 
-def filter_geneIDs(fname, fout, fgeneIDs, id_sep=',', gene_col=None):
-
+def filter_geneIDs(fname, fout, fgeneIDs, id_sep=',', gene_col=None):    
     ## if gff doesn't have geneID appended, append it
     if gene_col == None:
         append_geneID(fname, fout, gene_col=-1)
         fname = fout
-
     ## get list of geneIDs to be selected
     geneIDs = []
     with open(fgeneIDs) as f:
         lines = [x[:-1] for x in f.readlines()]
         for line in lines:
             geneIDs.extend(l.split(id_sep))
-
     gff_sel = []
     ## start filtering
     with open(fout) as f:
         lines = [x[:-1] for x in f.readlines()]
         gff_sel = ['\t'.join(x) for x in lines if (x[gene_col] in geneIDs)]
-
     # write features to file
     import os
     f = open(fout, "w+")
@@ -108,7 +100,6 @@ def filter_geneIDs(fname, fout, fgeneIDs, id_sep=',', gene_col=None):
         os.system("sort -u {} | bedtools sort -i - > temp.txt; mv temp.txt {}".format(fout, fout))
     else:
         os.system("bedtools sort -i {} > temp.txt; mv temp.txt {}".format(fout, fout))
-
     return 0
 
 class GFF:
@@ -174,8 +165,13 @@ class GFF:
         if self.is_bed():
             def mk_annotation(entry):
                 entry = split_line(entry)
-                gff_fmt = [entry[0], entry[6], entry[7], str(int(entry[1]) + 1), entry[2],
-                           entry[4], entry[5], entry[8], entry[9]]
+                def get_col(i, default = '.'):
+                    if i >= len(entry):
+                        return default
+                    else:
+                        return entry[i]
+                gff_fmt = [get_col(0), get_col(6), get_col(7), str(int(get_col(1)) + 1), get_col(2),
+                           get_col(4), get_col(5), get_col(8), get_col(9, '')]
                 return Annotation(gff_fmt, self, **self._kwargs)
         else: ## GFF3
             def mk_annotation(entry):
@@ -295,7 +291,7 @@ class GFF:
         final_features = sorted(features + subfeatures)
         if index: return final_features
         else: return self.get_i(final_features)
-
+    
     def get_i_raw(self, indices, strip_newline = True):
         indices = indices if not isinstance(indices, int) else [indices]
         return self._indexed_file.get_line(*indices, strip_newline = strip_newline)
@@ -350,7 +346,7 @@ class GFF:
         Executes get_id, then writes output to file
         '''
         self.write(fout, self.get_id(feature_ids), **kwargs)
-        
+
 class Annotation:
     def __init__(self, entry, gff, **kwargs):
         self._gff = gff

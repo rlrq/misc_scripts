@@ -26,8 +26,8 @@ class IndexedFile:
                 if i % self.chunk_lines == 0:
                     indices.append(f.tell())
         self.indices = indices
-    def get_line(self, *indices, strip_newline = False):
-        single_i = len(indices) == 1
+    def yield_line(self, *indices, strip_newline = False):
+        # single_i = len(indices) == 1
         ## remove invalid indices (<0)
         is_valid = lambda i: i >= 0 and int(i) == i
         invalid = [i for i in indices if not is_valid(i)]
@@ -51,9 +51,16 @@ class IndexedFile:
                 for line in f:
                     if self.skip(line): continue
                     if i in i_offsets:
-                        output.append(line)
+                        yield (line if not strip_newline else line.replace('\n', ''))
                         ## exit bin if all desired lines in bin have been visited
                         if i == last_i_offset: break
                     i += 1
-        if strip_newline: output = [line.replace('\n', '') for line in output]
+    def get_line(self, *indices, strip_newline = False):
+        single_i = len(indices) == 1
+        output = list(self.yield_line(*indices, strip_newline = strip_newline))
         return output if not single_i else output[0]
+    def get_and_write(self, fout, *indices):
+        with open(fout, 'w+') as f:
+            for line in self.yield_line(*indices, strip_newline = False):
+                f.write(line)
+        return
