@@ -14,6 +14,7 @@ def extract_features_and_subfeatures(gff_fname, feature_id_fname, fout, fout_fmt
         fmt = "BED" if gff_fname[-3:].upper() == "BED" else "GFF"
     gff = GFF(fname = gff_fname, fmt = fmt, attr_mod = attr_mod, memsave = memsave)
     feature_ids = splitlines(feature_id_fname)
+    print(feature_ids)
     print("Retrieving features")
     output_features = gff.get_features_and_subfeatures(feature_ids, index = True, full = True)
     output_features = sorted(set(output_features)) ## sort and remove repeat indices

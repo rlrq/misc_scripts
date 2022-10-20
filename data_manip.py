@@ -15,7 +15,8 @@ def make_custom_get(header, parse_num = True):
         else:
             return output if not str(output).replace('.','',1).replace('-','',1).isdigit() else \
                 float(output) if not str(output).isdigit() else int(output)
-    def helper(data = None, *colnames, get_cols = False, suppress_print = False, ncol = False):
+    def helper(data = None, *colnames, get_cols = False, suppress_print = False, ncol = False,
+               return_list = False):
         if get_cols:
             return header
         if ncol:
@@ -30,7 +31,7 @@ def make_custom_get(header, parse_num = True):
                                                        for c in range(len(output[0]))]
         else:
             output = [get_col_in_row(data, colname) for colname in colnames]
-            return output[0] if (len(output) == 1) else output
+            return output[0] if (len(output) == 1 and not return_list) else output
     return helper
 
 def parse_get_data(fname, delim = '\t', detect = True):

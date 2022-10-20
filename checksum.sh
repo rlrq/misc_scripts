@@ -4,6 +4,8 @@
 
 if [ -z ${3} ]; then
     echo "--missing argument(s)--"
+    echo "usage: checksum <algorithm> <fname> <sum>"
+    echo "(e.g. 'checksum md5sum interproscan-5.56-89.0-64-bit.tar.gz f3288327a6c7be1ff42220c3b7a1de43')"
     exit 1
 fi
 

@@ -104,13 +104,14 @@ def filter_geneIDs(fname, fout, fgeneIDs, id_sep=',', gene_col=None):
 
 class GFF:
     
-    def __init__(self, fname = None, data = [], attr_mod = {}, fmt = None, quiet = False,
+    def __init__(self, fname = None, data = [], string = None, attr_mod = {}, fmt = None, quiet = False,
                  memsave = False, chunk_lines = 1000, **kwargs):
         self._fmt = (fmt if fmt
                      else None if not fname
                      else ("BED" if fname.split('.')[-1].upper() == "BED" else "GFF3"))
         self._fname = fname
         self._data = data
+        self._string = string
         self._attr_mod = attr_mod if isinstance(attr_mod, dict) else parse_attr_mod_sdict(attr_mod)
         self._attr_fields = {"all": {"ID": "ID", "Name": "Name", "Alias": "Alias", "Parent": "Parent",
                                      "Target": "Target", "Gap": "Gap", "Derives_from": "Derives_from",
@@ -188,10 +189,14 @@ class GFF:
                 for entry in f:
                     if tuple(entry[:1]) == ('#',) or entry == '\n': continue
                     yield entry
+        elif self._string is not None:
+            for entry in self._string.split('\n'):
+                if tuple(entry[:1]) == ('#',) or entry == '\n': continue
+                yield entry
         return
     
     def parse(self):
-        if self._fname is not None:
+        if self._fname is not None or self._string is not None:
             ## start parsing
             self._data = []
             for entry in self:
@@ -368,6 +373,8 @@ class Annotation:
                         "strand": self.strand,
                         "phase": self.phase,
                         "attributes": self.attributes}
+    def __eq__(self, other):
+        return (self.generate_gff(standardise = True) == other.generate_gff(standardise = True))
     def generate_attr(self, original = True, fields = None):
         if original: return self.attributes._raw
         else: return self.attributes.standardise_fields()
@@ -377,13 +384,14 @@ class Annotation:
         elif fmt.upper() in {"BED"}:
             output = self.generate_bed()
         return '\t'.join(map(str, output))
-    def generate_gff(self):
+    def generate_gff(self, standardise = False):
         return list(map(str, [self.molecule, self.source, self.feature, self.start, self.end,
-                              self.score, self.strand, self.phase, self.generate_attr()]))
-    def generate_bed(self):
+                              self.score, self.strand, self.phase,
+                              self.generate_attr(original = (not standardise))]))
+    def generate_bed(self, standardise = False):
         return list(map(str, [self.molecule, self.start - 1, self.end, self.attributes.get("ID", fmt = str),
                               self.score, self.strand, self.source, self.feature, self.phase,
-                              self.generate_attr()]))
+                              self.generate_attr(original = (not standardise))]))
     def get(self, *fields):
         return [self.f_dict[field] for field in fields]
     
@@ -441,7 +449,7 @@ class Attributes:
         return (set(self.get(a)) & set(vals)) ## checks intersection != empty set
     def standardise_fields(self):
         def get_mod(field):
-            feature_mod = get_recursively(self._gff._attr_fields_inv, field, self.feature, field)
+            feature_mod = get_recursively(self._gff._attr_fields_inv, field, self._entry.feature, field)
             if feature_mod != field: return feature_mod
             else: return get_recursively(self._gff._attr_fields_inv, field, "all", field)
         return ';'.join([f"{get_mod(k)}={'.'.join(v)}" for k, v in self._data.items()])
