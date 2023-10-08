@@ -58,3 +58,11 @@ function get_vdw_gene_from_name {
     getseq_to_bed $1 $2
     get_vdw_feature_overlapping_bed $2 $3 gene
 }
+
+function get_seq_from_gid {
+    local fname=${1}
+    local fout=${2}
+    local gids=${3}
+    local feature_type=${4}
+    python3 -c "import re; from Bio import SeqIO; ids = set('${gids}'.split(',')); records = [record for record in SeqIO.parse('${fname}', 'fasta') if re.search('(?<=\|).+?(?=\|${feature_type}\|)', record.id).group(0) in ids]; SeqIO.write(records, '${fout}', 'fasta')"
+}

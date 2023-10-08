@@ -45,7 +45,7 @@ def filter_title(fasta, fout, titles, match_exact = False, match_pattern = False
     keep only sequences with titles that (partially) match a set of specified titles
     """
     seq_dict = fasta_to_dict(fasta)
-    titles_list = single_col_to_list(titles)
+    titles_list = titles if not isinstance(titles, str) else single_col_to_list(titles)
     output = []
     for title in titles_list:
         output.extend([(k,v) for k,v in seq_dict.items() if \
@@ -383,3 +383,64 @@ def subset_minimum_call(seqs, min_call, inclusive = True, gap_char = '-'):
             for seqid, seq in seqs.items():
                 output[seqid] += seq[i]
     return retained, output
+
+def remove_stop_codon(fname, fout):
+    """
+    Removes stop codons and writes to a new file
+    """
+    from Bio import SeqIO
+    seqs = {}
+    for seq_record in SeqIO.parse(fname, "fasta"):
+        seqs[seq_record.id] = seq_record.seq.replace('*', '')
+    dict_to_fasta(seqs, fout)
+    return
+
+def remove_gap_col_v1(seqs):
+    sample_seq = tuple(seqs.values())[0]
+    aln_len = len(sample_seq)
+    gap_cols = set(i for i in range(aln_len) if all([x[i] == '-' for x in seqs.values()]))
+    empty_seq = sample_seq[0:0]
+    output = {seqid: empty_seq for seqid in seqs}
+    for i in range(aln_len):
+        if i not in gap_cols:
+            for seqid, seq in seqs.items():
+                output[seqid] = output[seqid] + seq[i]
+    return output
+
+## remove columns where >=p*N sequences have gaps
+def degap(seqs, p = 0.1):
+    sample_seq = tuple(seqs.values())[0]
+    aln_len = len(sample_seq)
+    aln_N = len(seqs)
+    threshold = p * aln_N
+    gap_cols = set(i for i in range(aln_len) if (sum(x[i] == '-' for x in seqs.values())) >= threshold)
+    empty_seq = sample_seq[0:0]
+    output = {seqid: empty_seq for seqid in seqs}
+    for i in range(aln_len):
+        if i not in gap_cols:
+            for seqid, seq in seqs.items():
+                output[seqid] = output[seqid] + seq[i]
+    return output
+
+def remove_gap_col_v2(seqs):
+    return degap(seqs, p = 1)
+
+remove_gap_col = remove_gap_col_v2
+
+## replaces any X reisude with gap (-)
+def X_as_gap(seqs):
+    return {seqid: seq.replace('X', '-') for seqid, seq in seqs.items()}
+
+## assumes alignment by codon, replaces any condon containing any number of N/n nucleotides with ---
+def N_codon_as_gap(seqs):
+    output = {}
+    for seqid, seq in seqs.items():
+        seq_out = seq[0:0]
+        for i in range(0,len(seq),3):
+            codon = seq[i:i+3]
+            if 'N' in codon or 'n' in codon:
+                seq_out += type(seq)('---')
+            else:
+                seq_out += codon
+        output[seqid] = seq_out
+    return output

@@ -24,6 +24,9 @@ def expand_range(fname, fout, distance = 0, fmt = None):
     dat = [x.split('\t') for x in splitlines(fname)]
     print("Expanding ranges")
     for entry in dat:
+        if entry[0][0] == '#':
+            if entry == "##FASTA": break
+            else: continue
         entry[start_i] = max(lower_limit, int(entry[start_i]) - distance)
         entry[end_i] = int(entry[end_i]) + distance
     print("Writing features")

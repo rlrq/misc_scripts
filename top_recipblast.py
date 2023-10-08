@@ -4,6 +4,38 @@ sys.path.append("/mnt/chaelab/rachelle/src")
 from fasta_manip import fasta_to_dict, dict_to_fasta
 from data_manip import splitlines
 
+def blast6_list_to_qseqid_dict(data, *cols_to_keep, i_qseqid = 0) -> dict:
+    """
+    Read BLAST output (fmt 6; tsv), parsed into list of list, into dictionary indexed by
+    qseqid. Format: {<qseqid>: [[<hit1 data>], [<hit2 data>], ...]}
+    
+    Arguments:
+        data (list): list of hits, where each hit is a list obtained by
+            splitting raw hit line by delimiter '\t'
+        *cols_to_keep (int): indices of columns to keep; data will
+            be ordered in the same order as specified here; a field
+            may be specified multiple times
+        i_qseqid (int): column index of qseqid field
+            (default=0; per fmt 6 default field)
+    
+    Returns:
+        dict
+    """
+    ## make keep_cols function to generate retained data
+    if cols_to_keep:
+        def keep_cols(line_dat):
+            return [line_dat[i] for i in cols_to_keep]
+    else:
+        def keep_cols(line_dat):
+            return line_dat
+    ## parse data
+    dat = {}
+    for hit in data:
+        qseqid = hit[i_qseqid]
+        dat[qseqid] = dat.get(qseqid, []) + [keep_cols(hit)]
+    return dat
+
+
 def blast6_to_qseqid_dict(fname, *cols_to_keep, i_qseqid = 0) -> dict:
     """
     Read BLAST output file (fmt 6; tsv) into dictionary indexed by
@@ -36,6 +68,82 @@ def blast6_to_qseqid_dict(fname, *cols_to_keep, i_qseqid = 0) -> dict:
             dat[qseqid] = dat.get(qseqid, []) + [keep_cols(line_dat)]
     return dat
 
+def blast6_list_top_n(data, n = 5, fout = None, fields = None) -> None:
+    """
+    Retain only top 'n' hit for each qseqid (sorted by bitscore). If
+    tie for Nth place, all hits with threshold score are retained.
+    
+    Arguments:
+        data (list): list of hits, where each hit is a list obtained by
+            splitting raw hit line by delimiter '\t'
+        n (int): top N number of hits to keep per qseqid (default=5)
+        fout (str): optional, path to output file
+        fields (list/tuple): rblast field names, required only if
+            non-standard order/combo of fields in rblast
+    """
+    dat = blast6_gen_top_n(data, n = n, fout = fout, fields = fields, file_inpt = False)
+    # if fields:
+    #     i_qseqid = fields.index("qseqid")
+    #     i_bitscore = fields.index("bitscore")
+    # else:
+    #     i_qseqid = 0
+    #     i_bitscore = -1
+    # dat = blast6_list_to_qseqid_dict(data, i_qseqid = i_qseqid)
+    # for qseqid, qdat in dat.items():
+    #     if len(qdat) < n:
+    #         continue
+    #     threshold_score = float(sorted(qdat, key = lambda x: float(x[i_bitscore]))[-n][i_bitscore])
+    #     dat[qseqid] = [x for x in qdat if float(x[i_bitscore]) >= threshold_score]
+    # ## write
+    # if fout:
+    #     with open(fout, "w+") as f:
+    #         for qseqid, qdat in dat.items():
+    #             for hit_dat in qdat:
+    #                 f.write('\t'.join(hit_dat) + '\n')
+    return dat
+
+def blast6_gen_top_n(inpt, n = 5, fout = None, fields = None, file_inpt = None) -> None:
+    """
+    Retain only top 'n' hit for each qseqid (sorted by bitscore). If
+    tie for Nth place, all hits with threshold score are retained.
+    
+    Arguments:
+        inpt (list or path): list of hits, where each hit is a list obtained by
+            splitting raw hit line by delimiter '\t' OR
+            path to BLAST fmt 6 (tsv) output file
+            (ensure file_inpt flag is appropriately raised or lowered)
+        n (int): top N number of hits to keep per qseqid (default=5)
+        fout (str): optional, path to output file
+        fields (list/tuple): rblast field names, required only if
+            non-standard order/combo of fields in rblast
+        file_inpt (bool): whether inpt is a (path to) file
+            (default=None will autoraise flag if inpt is a str)
+    """
+    if fields:
+        i_qseqid = fields.index("qseqid")
+        i_bitscore = fields.index("bitscore")
+    else:
+        i_qseqid = 0
+        i_bitscore = -1
+    if file_inpt is None:
+        file_inpt = isinstance(inpt, str)
+    if file_inpt:
+        dat = blast6_to_qseqid_dict(inpt, i_qseqid = i_qseqid)
+    else:
+        dat = blast6_list_to_qseqid_dict(inpt, i_qseqid = i_qseqid)
+    for qseqid, qdat in dat.items():
+        if len(qdat) < n:
+            continue
+        threshold_score = float(sorted(qdat, key = lambda x: float(x[i_bitscore]))[-n][i_bitscore])
+        dat[qseqid] = [x for x in qdat if float(x[i_bitscore]) >= threshold_score]
+    ## write
+    if fout:
+        with open(fout, "w+") as f:
+            for qseqid, qdat in dat.items():
+                for hit_dat in qdat:
+                    f.write('\t'.join(hit_dat) + '\n')
+    return dat
+
 def blast6_top_n(blast, n = 5, fout = None, fields = None) -> None:
     """
     Retain only top 'n' hit for each qseqid (sorted by bitscore). If
@@ -48,18 +156,25 @@ def blast6_top_n(blast, n = 5, fout = None, fields = None) -> None:
         fields (list/tuple): rblast field names, required only if
             non-standard order/combo of fields in rblast
     """
-    if fields:
-        i_qseqid = fields.index("qseqid")
-        i_bitscore = fields.index("bitscore")
-    else:
-        i_qseqid = 0
-        i_bitscore = -1
-    dat = blast6_to_qseqid_dict(blast, i_qseqid = i_qseqid)
-    for qseqid, qdat in dat.items():
-        if len(qdat < n):
-            continue
-        threshold_score = float(sorted(qdat, key = lambda x: float(x[i_bitscore]))[-n][i_bitscore])
-        dat[qseqid] = [x for x in qdat if float(x[i_bitscore]) >= threshold_score]
+    dat = blast6_gen_top_n(blast, n = n, fout = fout, fields = fields, file_inpt = True)
+    # if fields:
+    #     i_qseqid = fields.index("qseqid")
+    #     i_bitscore = fields.index("bitscore")
+    # else:
+    #     i_qseqid = 0
+    #     i_bitscore = -1
+    # dat = blast6_to_qseqid_dict(blast, i_qseqid = i_qseqid)
+    # for qseqid, qdat in dat.items():
+    #     if len(qdat) < n:
+    #         continue
+    #     threshold_score = float(sorted(qdat, key = lambda x: float(x[i_bitscore]))[-n][i_bitscore])
+    #     dat[qseqid] = [x for x in qdat if float(x[i_bitscore]) >= threshold_score]
+    # ## write
+    # if fout:
+    #     with open(fout, "w+") as f:
+    #         for qseqid, qdat in dat.items():
+    #             for hit_dat in qdat:
+    #                 f.write('\t'.join(hit_dat) + '\n')
     return dat
 
 def blast6_top_n_memsave(blast, fout = None, n = 5, fields = None) -> dict:
@@ -69,7 +184,7 @@ def blast6_top_n_memsave(blast, fout = None, n = 5, fields = None) -> dict:
     
     Memory saving version; may take longer to run as threshld score is
     dynamically calculated after every hit is processed but should save
-    memory by not reading all reads to memory first before filtering.
+    memory by not reading all hits to memory first before filtering.
     
     Arguments:
         blast (str): path to BLAST fmt 6 (tsv) output file

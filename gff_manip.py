@@ -171,7 +171,8 @@ class GFF:
                         return default
                     else:
                         return entry[i]
-                gff_fmt = [get_col(0), get_col(6), get_col(7), str(int(get_col(1)) + 1), get_col(2),
+                gff_fmt = [get_col(0), get_col(6), get_col(7),
+                           get_col(1) if get_col(1) == '.' else (str(int(get_col(1)) + 1)), get_col(2),
                            get_col(4), get_col(5), get_col(8), get_col(9, '')]
                 return Annotation(gff_fmt, self, **self._kwargs)
         else: ## GFF3
@@ -337,7 +338,7 @@ class GFF:
         Writes entries to file
         '''
         with open(fout, "w+") as f:
-            f.write('\n'.join([entry.generate_str(**kwargs) for entry in entries]) + '\n')
+            f.write('\n'.join([entry.generate_str(**kwargs) for entry in ([] if entries is None else entries)]) + '\n')
     
     def write_i(self, fout, indices, **kwargs):
         '''
@@ -358,8 +359,13 @@ class Annotation:
         self.molecule = entry[0]
         self.source = entry[1]
         self.feature = entry[2]
-        self.start = int(entry[3])
-        self.end = int(entry[4])
+        try:
+            self.start =  int(entry[3])
+            self.end = int(entry[4])
+        except Exception as e:
+            print(entry)
+            print(gff._fname)
+            raise e
         self.score = entry[5] if entry[5] == '.' else float(entry[5])
         self.strand = entry[6]
         self.phase = entry[7] if entry[7] == '.' else int(entry[7])
