@@ -8,6 +8,10 @@ from basics import get_recursively
 from data_manip import splitlines
 from index_file import IndexedFile
 
+class AnnotationError(Exception):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
 ## parse_sep_dict and parse_attr_mod_sdict are copied from MINORg's parse_config.py
 def parse_sep_sdict(s: str, item_sep: str = ';', kv_sep = ':'):
     '''
@@ -298,9 +302,9 @@ class GFF:
         if index: return final_features
         else: return self.get_i(final_features)
     
-    def get_i_raw(self, indices, strip_newline = True):
+    def get_i_raw(self, indices, strip_newline = True, **kwargs):
         indices = indices if not isinstance(indices, int) else [indices]
-        return self._indexed_file.get_line(*indices, strip_newline = strip_newline)
+        return self._indexed_file.get_line(*indices, strip_newline = strip_newline, **kwargs)
     
     def get_i(self, indices):
         '''
@@ -310,10 +314,10 @@ class GFF:
             if type(indices) is int: return self._data[indices]
             else: return [self._data[i] for i in indices]
         elif self.is_indexed():
-            raw_entries = self.get_i_raw(indices, strip_newline = True)
+            raw_entries = self.get_i_raw(indices, strip_newline = True, as_list = True)
             ## newline already stripped by get_i_raw. No need to strip them again.
             mk_annotation = self.make_annotation_from_str_gen(strip_newline = False)
-            if type(indices) is int: return mk_annotation(raw_entries)
+            if type(indices) is int: return mk_annotation(raw_entries[0])
             else: return [mk_annotation(entry) for entry in raw_entries]
     
     def get_id(self, feature_ids, index = False, output_list = False):
@@ -365,7 +369,7 @@ class Annotation:
         except Exception as e:
             print(entry)
             print(gff._fname)
-            raise e
+            raise AnnotationError("Invalid annotation input format")
         self.score = entry[5] if entry[5] == '.' else float(entry[5])
         self.strand = entry[6]
         self.phase = entry[7] if entry[7] == '.' else int(entry[7])

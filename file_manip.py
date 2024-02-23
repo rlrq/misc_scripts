@@ -122,3 +122,47 @@ def replace_ext(fname, new_ext, old_ext = None):
     else:
         fname = re.search(f"^.+(?=\.{old_ext}$)", fname).group(0)
     return f"{fname}.{new_ext}"
+
+class DelimitedFileWithHeader():
+    def __init__(self, fname, delimiter = '\t', encoding = "utf-8"):
+        self.fname = fname
+        self.delimiter = delimiter
+        self.encoding = encoding
+        with open(fname, 'r', encoding = encoding) as f:
+            self.header = f.readline()[:-1].split(delimiter) ## [:-1] strips newline character
+        self.indexed_header = {colname: i for i, colname in enumerate(self.header)}
+    def _iter_raw(self):
+        with open(self.fname, 'r', encoding = self.encoding) as f:
+            _header = f.readline()
+            for line in f:
+                stripped = line[:-1] ## strip newline character
+                if len(stripped) == 0:
+                    continue
+                yield stripped.split(self.delimiter)
+        return
+    def __iter__(self):
+        for line in self._iter_raw():
+            yield DelimitedFileWithHeaderEntry(self, line)
+        return
+    def col_i(self, colname):
+        return self.indexed_header.get(colname, None)
+    def filter(self, filter):
+        ## applies function passed to 'filter' to each SummaryFileEntry and only yields
+        ## if output of 'filter' is True
+        for entry in self:
+            if filter(entry):
+                yield(entry)
+        return
+
+class DelimitedFileWithHeaderEntry():
+    def __init__(self, file_obj, data):
+        self.data = data
+        self.file_obj = file_obj
+    def get(self, colname):
+        col_i = self.file_obj.col_i(colname)
+        return None if col_i is None else self.data[col_i]
+
+class TSVWithHeader(DelimitedFileWithHeader):
+    def __init__(self, fname):
+        super().__init__(fname, '\t')
+

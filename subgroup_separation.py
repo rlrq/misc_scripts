@@ -43,10 +43,14 @@ def max_branch_length(t):
 def sd_mean(t):
     ## parse root edges (since we're assuming unrooted tree)
     root_edges = tuple(t.seed_node.child_edges())
-    root_edges_length = (0 if len(root_edges) != 2 else sum([edge_len(e) for e in root_edges]))
+    if len(root_edges) == 2:
+        root_edges_lengths = [sum(edge_len(e) for e in root_edges)]
+    else:
+        root_edges_lengths = [edge_len(e) for e in root_edges]
+    # root_edges_length = (0 if len(root_edges) != 2 else sum([edge_len(e) for e in root_edges]))
     ## parse other edges
     branch_lengths = [edge_len(e) for e in t.preorder_edge_iter() if
-                      (e is not t.seed_node.edge and not e in root_edges)] + [root_edges_length]
+                      (e is not t.seed_node.edge and not e in root_edges)] + root_edges_lengths
     ## return NaN if only 1 leaf or all branch lengths == 0
     if (len(branch_lengths) <= 1 or all(map(lambda l: l==0, branch_lengths))):
         return float("NaN")
@@ -137,6 +141,7 @@ parser.add_argument("-m", "--members", "--grp1members", "--grp2members",
                     type = str, dest = "members", help = "comma-separated leaf names for either group")
 
 args = parser.parse_args()
-report_separation(args.out, tree = args.tree, schema = args.schema,
-                  og = args.og, grp1 = args.grp1, grp2 = args.grp2,
-                  members = args.members)
+if len(sys.argv) > 1:
+    report_separation(args.out, tree = args.tree, schema = args.schema,
+                      og = args.og, grp1 = args.grp1, grp2 = args.grp2,
+                      members = args.members)

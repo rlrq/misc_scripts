@@ -444,3 +444,44 @@ def N_codon_as_gap(seqs):
                 seq_out += codon
         output[seqid] = seq_out
     return output
+
+def aln_to_btop(seq1, seq2, pad_unequal = False):
+    if len(seq1) != len(seq2):
+        if pad_unequal:
+            len1 = len(seq1)
+            len2 = len(seq2)
+            if len1 > len2:
+                seq2 += '-' * (len1 - len2)
+            else:
+                seq1 += '-' * (len2 - len1)
+        else:
+            print("seq1:", seq1)
+            print("seq2:", seq2)
+            raise Exception("sequences must be of equal length")
+    output = ''
+    matches = 0
+    for i in range(len(seq1)):
+        if seq1[i] == seq2[i]:
+            matches += 1
+        else:
+            if matches != 0:
+                output += str(matches)
+                matches = 0
+            output += seq1[i]
+            output += seq2[i]
+    if matches != 0:
+        output += str(matches)
+    return output
+
+def filter_fasta_by_seqid(fa_out, fa_in, f_seqid):
+    from Bio import SeqIO
+    from data_manip import splitlines
+    seqids = set(splitlines(f_seqid))
+    def helper():
+        for record in SeqIO.parse(fa_in, "fasta"):
+            if record.description in seqids:
+                yield(record)
+        return
+    with open(fa_out, "w+") as fout:
+        _ = SeqIO.write(helper(), fout, "fasta")
+    return

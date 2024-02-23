@@ -13,7 +13,8 @@ def make_custom_get(header, parse_num = True):
                 output = [float(x) for x in output]
             return output
         else:
-            return output if not str(output).replace('.','',1).replace('-','',1).isdigit() else \
+            return output if (parse_num is False
+                              or (not str(output).replace('.','',1).replace('-','',1).isdigit())) else \
                 float(output) if not str(output).isdigit() else int(output)
     def helper(data = None, *colnames, get_cols = False, suppress_print = False, ncol = False,
                return_list = False):
@@ -34,7 +35,7 @@ def make_custom_get(header, parse_num = True):
             return output[0] if (len(output) == 1 and not return_list) else output
     return helper
 
-def parse_get_data(fname, delim = '\t', detect = True):
+def parse_get_data(fname, delim = '\t', detect = True, parse_num = True):
     if detect:
         ext = fname.split('.')[-1]
         if ext == "csv":
@@ -44,7 +45,7 @@ def parse_get_data(fname, delim = '\t', detect = True):
     # data = [(''.join([c for c in line if c != '\n'])).split(delim)
     #         for line in open(fname, 'r').readlines()]
     data = [line.split(delim) for line in splitlines(fname)]
-    get = make_custom_get(data[0])
+    get = make_custom_get(data[0], parse_num = parse_num)
     return get, data[1:]
 
 def extend_get(get_f, extension):

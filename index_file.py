@@ -55,10 +55,10 @@ class IndexedFile:
                         ## exit bin if all desired lines in bin have been visited
                         if i == last_i_offset: break
                     i += 1
-    def get_line(self, *indices, strip_newline = False):
+    def get_line(self, *indices, strip_newline = False, as_list = False):
         single_i = len(indices) == 1
         output = list(self.yield_line(*indices, strip_newline = strip_newline))
-        return output if not single_i else output[0]
+        return output if (as_list or not single_i) else output[0]
     def get_and_write(self, fout, *indices):
         with open(fout, 'w+') as f:
             for line in self.yield_line(*indices, strip_newline = False):
