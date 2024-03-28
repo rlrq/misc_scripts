@@ -16,6 +16,9 @@ parser$add_argument("outpt", metavar="FILE", type="character", nargs=1, help="ou
 parser$add_argument("--id", metavar="character", default=NULL, type="character", help="column name of accession IDs")
 parser$add_argument("--cs", metavar="character", default=NULL, type="character", help="column name of CS numbers")
 parser$add_argument("--name", metavar="character", default=NULL, type="character", help="column name of accession names")
+parser$add_argument("--other", metavar="character", default=NULL, type="character", nargs='+',
+                    help="column names to keep")
+## parser$add_argument("--delim-other", metavar="character", default=',', type="character", help="delimiter for --other (default=',')")
 
 args <- parser$parse_args()
 
@@ -50,6 +53,9 @@ if (!is.null(args$name)){
     df.left$name <- df.biosamples[,str_replace_all(args$name, ' ', '.')]
     join_keys <- c(join_keys, "name")
 }
+for (colname in args$other){
+    df.left[[colname]] <- df.biosamples[,colname]
+}
 
 ## parse right data
 df.acc <- read.table("/mnt/chaelab/rachelle/data/accessions/accession_meta/athaliana_master_accessions.tsv",
@@ -58,10 +64,10 @@ df.acc <- read.table("/mnt/chaelab/rachelle/data/accessions/accession_meta/athal
 
 ## merge
 df.output <- left_join(df.left, df.acc, by = join_keys)
-df.output <- df.output[,c("BioSample", "name", "id", "CSnumber")] %>%
-    dplyr::mutate(name.in.right = name %in% df.acc$name,
-                  id.in.right = id %in% df.acc$id,
-                  CSnumber.in.right = CSnumber %in% df.acc$CSnumber)
+df.output <- df.output[,c("BioSample", "name", "id", "CSnumber", args$other)] %>%
+    dplyr::mutate(name.in.right = ifelse(name == '', FALSE, name %in% df.acc$name),
+                  id.in.right = ifelse(is.na(id), FALSE, id %in% df.acc$id),
+                  CSnumber.in.right = ifelse(CSnumber == '' || is.na(CSnumber), FALSE, CSnumber %in% df.acc$CSnumber))
 
 ## write
 write.table(df.output, args$outpt, quote = FALSE, sep = '\t', row.name = FALSE)

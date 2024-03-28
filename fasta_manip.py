@@ -55,9 +55,13 @@ def filter_title(fasta, fout, titles, match_exact = False, match_pattern = False
     dict_to_fasta(dict(output), fout, **for_dict_to_fasta)
 
 
-def filter_fasta(fname, fout, pattern):
-    seqs = {k: v for k, v in fasta_to_dict(fname).items() if
-            re.search(pattern, k)}
+def filter_fasta(fname, fout, pattern, negative = False):
+    if not negative:
+        seqs = {k: v for k, v in fasta_to_dict(fname).items() if
+                re.search(pattern, k)}
+    else:
+        seqs = {k: v for k, v in fasta_to_dict(fname).items() if
+                not re.search(pattern, k)}
     dict_to_fasta(seqs, fout)
     return
 
@@ -408,7 +412,7 @@ def remove_gap_col_v1(seqs):
     return output
 
 ## remove columns where >=p*N sequences have gaps
-def degap(seqs, p = 0.1):
+def remove_uninformative_columns(seqs, p = 0.1):
     sample_seq = tuple(seqs.values())[0]
     aln_len = len(sample_seq)
     aln_N = len(seqs)
@@ -421,6 +425,8 @@ def degap(seqs, p = 0.1):
             for seqid, seq in seqs.items():
                 output[seqid] = output[seqid] + seq[i]
     return output
+
+degap = remove_uninformative_columns
 
 def remove_gap_col_v2(seqs):
     return degap(seqs, p = 1)
