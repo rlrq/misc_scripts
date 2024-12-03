@@ -4,6 +4,7 @@ sys.path.append("/mnt/chaelab/rachelle/src")
 from reference import AnnotatedFasta
 from annotation import GFF, Annotation
 from fasta_manip import dict_to_fasta
+from pathlib import Path
 
 # dir_results = "/mnt/chaelab/rachelle/nlr_survey/results"
 # dir_out = dir_results + "/gff_curated"
@@ -12,7 +13,7 @@ def get_flanked_seq(ref, fids, flank = 200, feature_type = "gene",
                     gff_subset = None,
                     fasta_out = None, gff_out = None,
                     fasta_dir = None, gff_dir = None, gb_dir = None,
-                    prefix = "flanked"):
+                    prefix = "flanked", adjust_dir_fasta = False):
     """
     Subsets GFF3 annotation by feature IDs, includes subfeatures.
     Extends feature range by 'flank' bp and subtracts the lower value of the extended range
@@ -36,6 +37,7 @@ def get_flanked_seq(ref, fids, flank = 200, feature_type = "gene",
         fasta_dir (str): path to output FASTA directory (optional)
         gb_dir (str): path to output genbank directory (optional)
         prefix (str): prefix for files generated if gff_dir, fasta_dir, and/or gb_dir != None
+        adjust_dir_fasta (bool): set to True to write plus strand of genes
     
     Returns:
         dict: dictionary of extended sequences (format: {<feature ID>: <extended seq>})
@@ -49,12 +51,15 @@ def get_flanked_seq(ref, fids, flank = 200, feature_type = "gene",
     new_gff = GFF()
     sub_gffs = {}
     seq_output = {}
+    seq_output_adj = {}
     for fid in fids:
         entry = ref.annotated_feature(fid, feature_type = feature_type)
         mol, start, end = entry.molecule, entry.start, entry.end
         true_start = max(0, start-flank)
         seq = ref[mol][true_start:end+flank]
         seq_output[fid] = seq
+        if (fasta_out or fasta_dir) and adjust_dir_fasta:
+            seq_output_adj[fid] = seq.reverse_complement() if entry.strand == '-' else seq
         entries = ref.annotation.subset(fid)
         sub_gff = GFF()
         for entry in entries:
@@ -69,15 +74,19 @@ def get_flanked_seq(ref, fids, flank = 200, feature_type = "gene",
     if gff_out is not None:
         new_gff.write(fout = gff_out, seqs = seq_output)
     if gff_dir is not None:
+        Path(gff_dir).mkdir(parents = True, exist_ok = True)
         for fid, sub_gff in sub_gffs.items():
             sub_gff.write(fout = f"{gff_dir}/{prefix}_{fid}.gff3",
                           seqs = {fid: seq_output[fid]})
+    seq_output_for_fasta = seq_output if not adjust_dir_fasta else seq_output_adj
     if fasta_out is not None:
-        dict_to_fasta(seq_output, fasta_out)
+        dict_to_fasta(seq_output_for_fasta, fasta_out)
     if fasta_dir is not None:
-        for seqid, seq in seq_output.items():
+        Path(fasta_dir).mkdir(parents = True, exist_ok = True)
+        for seqid, seq in seq_output_for_fasta.items():
             dict_to_fasta({seqid: seq}, f"{fasta_dir}/{prefix}_{seqid}.fasta")
     if gb_dir is not None:
+        Path(gb_dir).mkdir(parents = True, exist_ok = True)
         for fid, sub_gff in sub_gffs.items():
             print(fid)
             with open(f"{gb_dir}/{prefix}_{fid}.gb", 'w+') as f:

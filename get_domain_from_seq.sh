@@ -89,7 +89,7 @@ else
     ## generate data for input as "DOMAIN_F" to getSeq
     awk -v raw="${domain}" -v d="${DOMAIN}" '{if ($2 ~ raw) print $0 "\t" d}' ${TSV_DOMAIN} >> ${tmp_f2}
     ## combine tmp_f into final DOMAIN_F for getSeq
-    echo -e "$(head -1 ${TSV_DOMAIN})$(cat ${tmp_f2})" > ${tsv_domain}
+    echo -e "$(head -1 ${TSV_DOMAIN})\n$(cat ${tmp_f2})" > ${tsv_domain}
     TSV_DOMAIN=${tsv_domain}
 fi
 

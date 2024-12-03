@@ -56,7 +56,7 @@ def filter_rpsblast(blasttsv, fout, pssm_ids, col_names = None,
     Arguments:
         blasttsv (str): path to RPS-BLAST output tsv file (outfmt 6)
         fout (str): path to output file
-        pssm_ids (list/tuple/set): PSSM-Ids to keep
+        pssm_ids (list/tuple/set): PSSM-Ids to keep. If empty, keeps all.
         col_names (list/tuple): column names if blasttsv has non-standard output field combo/order.
             Required columns: sseqid.
             If not provided, assumes default:
@@ -97,7 +97,7 @@ def filter_rpsblast(blasttsv, fout, pssm_ids, col_names = None,
         for entry in f:
             entry = entry[:-1].split('\t')
             pssmid = get_pssmid(entry[pssmid_i])
-            if pssmid not in pssm_ids:
+            if pssm_ids and (pssmid not in pssm_ids):
                 continue
             else:
                 output.append(filter_cols(entry, pssmid))

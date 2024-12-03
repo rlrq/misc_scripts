@@ -251,6 +251,60 @@ class GFF:
                  for feature, attr_map in self._attr_fields.items()}
         return output
     
+    def get_parent_features(self, feature_ids, *features, index = False):
+        '''
+        Get parent features w/ user-provided feature_ids.
+        '''
+        features = set(features)
+        if type(feature_ids) is str:
+            feature_ids = {feature_ids}
+        else:
+            feature_ids = set(feature_ids)
+        curr_indices = [entry for entry in self if 
+                        entry.has_attr("ID", feature_ids)]
+        parent_ids = set(itertools.chain(*[entry.get_attr("Parent", fmt = list) for entry in curr_indices]))
+        indices = [i for i, entry in enumerate(self) if
+                   ((not features or entry.feature in features) and
+                    entry.has_attr("ID", parent_ids))]
+        if index: return indices
+        else: return self.get_i(indices)
+    
+    def get_parent_features_full(self, feature_ids, *features, index = False):
+        '''
+        Get all features that are parent features of user-provided feature_ids
+        AND parent features of those features, until there are no parent-parent...parent-features left.
+        '''
+        features = set(features)
+        output_indices = []
+        curr_indices = []
+        iteration_n = 0
+        while True:
+            iteration_n += 1
+            print(f"Executing iteration {iteration_n}")
+            curr_indices = self.get_parent_features(feature_ids, index = True)
+            feature_ids = set(itertools.chain(*[self.get_i(i).get_attr("ID") for i in curr_indices]))
+            output_indices.extend(curr_indices)
+            if not feature_ids: break
+        if features:
+            output_indices = [i for i in output_indices if self.get_i(i).feature in features]
+        ## prepare output
+        output_indices = sorted(output_indices)
+        if index: return output_indices
+        else: return self.get_i(sorted(output_indices))
+    
+    def get_features_and_parent_features(self, feature_ids, index = False, full = True):
+        '''
+        Gets features w/ feature_ids AND parent features of those features.
+        If full = True, executes get_parent_features_full for parent feature discovery, else get_parent_features
+        '''
+        features = self.get_id(feature_ids, index = True, output_list = True)
+        if full: parent_features = self.get_parent_features_full(feature_ids, index = True)
+        else: parent_features = self.get_parent_features(feature_ids, index = True)
+        ## prepare output
+        final_features = sorted(features + parent_features)
+        if index: return final_features
+        else: return self.get_i(final_features)
+    
     def get_subfeatures(self, feature_ids, *features, index = False):
         '''
         Get subfeatures of features w/ user-provided feature_ids.
@@ -299,6 +353,30 @@ class GFF:
         else: subfeatures = self.get_subfeatures(feature_ids, index = True)
         ## prepare output
         final_features = sorted(features + subfeatures)
+        if index: return final_features
+        else: return self.get_i(final_features)
+    
+    def get_related_features(self, feature_ids, index = False, full = True, cousins = True):
+        '''
+        Gets features w/ feature_ids AND parent features + subfeatures of those features.
+        If full = True, executes get_parent_features_full + get_subfeatures_full, else get_parent_features + get_subfeatures
+        If cousins = True (only used if full = True), executes get_parent_features_full, merges those IDs with feature_ids, 
+        then executes get_subfeatures_full. This obtains all subfeatures of topmost parent features even if they are not
+        subfeatures of the requested feature_ids (e.g. if feature_ids is a list of transcript IDs, returned entries will include
+        other isoforms (of the same gene) that were not in feature_ids).
+        '''
+        features = self.get_id(feature_ids, index = True, output_list = True)
+        if full:
+            parent_features = self.get_parent_features_full(feature_ids, index = True)
+            if cousins:
+                feature_ids = set(feature_ids +
+                                  list(itertools.chain(*[self.get_i(i).get_attr("ID") for i in parent_features])))
+            subfeatures = self.get_subfeatures_full(feature_ids, index = True)
+        else:
+            parent_features = self.get_parent_features(feature_ids, index = True)
+            subfeatures = self.get_subfeatures(feature_ids, index = True)
+        ## prepare output
+        final_features = sorted(set(features + parent_features + subfeatures))
         if index: return final_features
         else: return self.get_i(final_features)
     

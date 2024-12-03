@@ -19,6 +19,12 @@ def any_overlap(r1, rs, **kwargs):
             return True
     return False
 
+def any_overlap_multi(rs1, rs2, **kwargs):
+    for r in rs1:
+        if any_overlap(r, rs2):
+            return True
+    return False
+
 def merge_2_overlapping_ranges(r1, r2):
     return min(r1 + r2), max(r1 + r2)
 
@@ -122,3 +128,23 @@ def merge_overlapping(*iters):
             iters = new_iters
             new_iters = []
     return new_iters
+
+## takes an iterable (of elements that can be sorted relative to each other)
+## returns a list where elements are ordered in decreasing frequency in the original iterable
+def order_elements_by_freq(iterable, exclude = []):
+    exclude = set(exclude)
+    ## get frequency of each element
+    count_dict = {element: freq for element, freq in get_count_dict(iterable).items()
+                  if element not in exclude}
+    ## order elementacters by frequency (most to least frequent, excluding elements in 'exclude')
+    element_by_freq = []
+    count_dict_inv = invert_dict(count_dict)
+    for freq in sorted(count_dict_inv.keys(), reverse = True):
+        ## tie break by elementacter's ascii number or whatever is used to sort elementacters in python
+        element_by_freq.extend(sorted(count_dict_inv[freq]))
+    return element_by_freq
+
+## converts iterable to dict of {element: order}
+## index just tells the function which rank to start counting from
+def order_to_dict(iterable, index = 1):
+    return {e: i+index for i, e in enumerate(iterable)}

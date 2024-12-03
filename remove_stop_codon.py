@@ -13,6 +13,7 @@ import fasta_manip
 parser = argparse.ArgumentParser(description="remove stop codons from FASTA file")
 parser.add_argument("fin", type=str, help="path to input FASTA file")
 parser.add_argument("fout", type=str, help="path to output FASTA file")
+parser.add_argument("--stop-char", type=str, help="stop codon character", default='*')
 args = parser.parse_args()
 
-fasta_manip.remove_stop_codon(args.fin, args.fout)
+fasta_manip.remove_stop_codon(args.fin, args.fout, stop_char = args.stop_char)

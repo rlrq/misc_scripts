@@ -388,15 +388,17 @@ def subset_minimum_call(seqs, min_call, inclusive = True, gap_char = '-'):
                 output[seqid] += seq[i]
     return retained, output
 
-def remove_stop_codon(fname, fout):
+def remove_stop_codon(fname, fout, stop_char = '*'):
     """
     Removes stop codons and writes to a new file
     """
     from Bio import SeqIO
-    seqs = {}
-    for seq_record in SeqIO.parse(fname, "fasta"):
-        seqs[seq_record.id] = seq_record.seq.replace('*', '')
-    dict_to_fasta(seqs, fout)
+    def helper(record):
+        record.seq = record.seq.replace(stop_char, '')
+        return record
+    inpt_records = SeqIO.parse(fname, "fasta")
+    outpt_records = (helper(record) for record in inpt_records) ## generator
+    SeqIO.write(outpt_records, fout, "fasta")
     return
 
 def remove_gap_col_v1(seqs):

@@ -23,6 +23,7 @@ while (( "$#" )); do
         --which-aln) ALN="${2}"; shift;; ## path to alignment binary
         --which-tree) TREE="${2}"; shift;; ## path to tree building binary
         --remove-duplicates) REMOVE_DUPLICATES=1;; ## remove duplicate sequences (by name)
+        --inpt-pattern) INPT_PATTERN="${2}";; ## capture filepath patterns
         *) INPT+=( "${1}" ); ## input files will be progressively added to alignment order
     esac
     shift
@@ -53,6 +54,14 @@ echo "Tree output: ${TREE_OUT}"
 for inpt in ${INPT[@]}; do
     echo ${inpt}
 done
+
+# declare -a inpt_pattern_matches
+# for match in ${INPT_PATTERN}; do
+#     inpt_pattern_matches+=("${match}")
+#     echo ${match}
+# done
+
+# exit 0
 
 ## argument checking
 if [ ${#INPT[@]} -eq 0 ] && [ -z ${SEED} ]; then
