@@ -2,18 +2,47 @@
 
 import sys
 sys.path.append("/mnt/chaelab/rachelle/scripts/minorgpy")
+sys.path.append("/mnt/chaelab/rachelle/src")
 
 import itertools
 from typing import Union, Generator, Callable
 
-from minorg.index import IndexedFile, IndexedFasta
+from index_file import IndexedFile
+from index_fasta import IndexedFasta
 
-from minorg.functions import (
-    assign_alias, make_local_print,
-    non_string_iter
-)
+# from minorg.index import IndexedFile, IndexedFasta
 
-from minorg.display import print_indent
+def make_local_print(quiet, printf = print):
+    def local_print(*args, **kwargs):
+        if not quiet: printf(*args, **kwargs)
+    return local_print
+
+def non_string_iter(val):
+    import collections
+    import six
+    ## if some kind of (non-generator) iterable
+    return (not isinstance(val, dict)
+            and isinstance(val, collections.Iterable)
+            and not isinstance(val, six.string_types))
+
+
+# from minorg.functions import (
+#     assign_alias, make_local_print,
+#     non_string_iter
+# )
+
+def print_indent(msg, lvl: int = 0, c: str = ' ', overwrite: bool = False):
+    '''
+    Print with indentation
+    '''
+    msg = (c * lvl) + str(msg)
+    if overwrite:
+        print(msg, end = '\r')
+    else:
+        print(msg)
+    return
+
+# from minorg.display import print_indent
 
 #################
 ##  GFF_MANIP  ##
