@@ -68,7 +68,7 @@ def var_at_pos(fout, fasta, ref_seqid, *positions_ref_ungapped, index = 1):
 #     "/mnt/chaelab/rachelle/zzOtherzz/DM3/2023_manuscript/variation/PAP2.Col-0_lin2023-pseudomolecule.pep.mafft.interfaceResidues.tsv",
 #     "/mnt/chaelab/rachelle/zzOtherzz/DM3/2023_manuscript/aln/PAP2.Col-0_lin2023-pseudomolecule.pep.mafft.fasta",
 #     "Col-0_ref|AT3G61540|CDS|AT3G61540.1",
-#     165,167,169,170,171,332,335,425,
+#     165,167,169,170,171,172,332,335,345,349,425,
 #     index = 1
 # )
 
@@ -77,6 +77,6 @@ def var_at_pos(fout, fasta, ref_seqid, *positions_ref_ungapped, index = 1):
 #     "/mnt/chaelab/rachelle/zzOtherzz/DM3/2023_manuscript/variation/PAP2.1001genomes.pep.interfaceResidues.tsv",
 #     "/mnt/chaelab/rachelle/zzOtherzz/DM3/2023_manuscript/seq/PAP2.1001genomes.pep.fasta",
 #     "6909|Col-0|AT3G61540|CDS|AT3G61540.1",
-#     165,167,169,170,171,332,335,425,
+#     165,167,169,170,171,172,332,335,345,349,425,
 #     index = 1
 # )
