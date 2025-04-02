@@ -75,7 +75,7 @@ def half_period_direction(data):
             curr_period_len += 1
     periods.append(curr_period_len)
     periods_dir.append(curr_direction)
-    return periods, periods_dir
+    return tuple(periods), tuple(periods_dir)
 
 ## 1/2 oscillation amplitude (per 1/2 cycle, defined as difference between the last & first value within each 1/2 cycle period)
 def half_amplitude(data, periods):
@@ -85,7 +85,7 @@ def half_amplitude(data, periods):
         i_end = i_start + period
         output.append(data[i_end] - data[i_start])
         i_start = i_end
-    return output
+    return tuple(output)
 
 ## 1/2 oscillation min (per 1/2 cycle, defined as the smaller value bounding a 1/2 cycle)
 def half_min(data, periods):
@@ -95,7 +95,7 @@ def half_min(data, periods):
         i_end = i_start + period
         output.append(min(data[i_start], data[i_end]))
         i_start = i_end
-    return output
+    return tuple(output)
 
 ## 1/2 oscillation max (per 1/2 cycle, defined as the larger value bounding a 1/2 cycle)
 def half_max(data, periods):
@@ -105,12 +105,21 @@ def half_max(data, periods):
         i_end = i_start + period
         output.append(max(data[i_start], data[i_end]))
         i_start = i_end
-    return output
+    return tuple(output)
 
 ## 1/2 oscillation rate (per 1/2 cycle, 1/2 oscillation amplitude divided by 1/2 oscillation period)
 def half_rate(periods, amplitudes):
-    return [amplitudes[i]/periods[i] for i in range(len(periods))]
+    return tuple(amplitudes[i]/periods[i] for i in range(len(periods)))
 
+## get all 1/2 oscillation stats
+def half_oscillation_stats(data):
+    periods, directions = half_period_direction(data)
+    amplitudes = half_amplitude(data, periods)
+    min_vals = half_min(data, periods)
+    max_vals = half_max(data, periods)
+    rates = half_rate(periods, amplitudes)
+    return {"period": periods, "direction": directions, "amplitude": amplitudes,
+            "min": min_vals, "max": max_vals, "rate": rates}
 
 ########  SMOOTHED 1/2 OSCILLATION  ########
 
@@ -135,10 +144,10 @@ def smoothed_half_period_direction(data, tolerance = 0):
             curr_period_len += 1
     periods.append(curr_period_len)
     periods_dir.append(curr_direction)
-    return periods, periods_dir
+    return tuple(periods), tuple(periods_dir)
 
 ## smoothed 1/2 oscillation amplitude (per 1/2 cycle, defined as the difference between the largest and smallest value within a smoothed 1/2 oscillation period)
-def smoothed_half_period_amplitude(data, tolerance = 0):
+def smoothed_half_period_amplitude(data, periods):
     output = []
     i_start = 0
     for period in periods:
@@ -146,7 +155,7 @@ def smoothed_half_period_amplitude(data, tolerance = 0):
         values = data[i_start:i_end+1]
         output.append(max(values) - min(values))
         i_start = i_end
-    return output
+    return tuple(output)
 
 ## smoothed 1/2 oscillation min (per 1/2 cycle, smallest value in a smoothed 1/2 oscillation period)
 def smoothed_half_min(data, periods):
@@ -157,7 +166,7 @@ def smoothed_half_min(data, periods):
         values = data[i_start:i_end+1]
         output.append(min(values))
         i_start = i_end
-    return output
+    return tuple(output)
 
 ## smoothed 1/2 oscillation max (per 1/2 cycle, largest value in a smoothed 1/2 oscillation period)
 def smoothed_half_max(data, periods):
@@ -168,11 +177,21 @@ def smoothed_half_max(data, periods):
         values = data[i_start:i_end+1]
         output.append(max(values))
         i_start = i_end
-    return output
+    return tuple(output)
 
 ## smoothed 1/2 oscillation rate (per 1/2 cycle, smoothed 1/2 oscillation amplitude divided by smoothed 1/2 oscillation period)
-def half_rate(periods, amplitudes):
-    return [amplitudes[i]/periods[i] for i in range(len(periods))]
+def smoothed_half_rate(periods, amplitudes):
+    return tuple(amplitudes[i]/periods[i] for i in range(len(periods)))
+
+## get all smoothed 1/2 oscillation stats
+def smoothed_half_oscillation_stats(data, tolerance = 0):
+    periods, directions = smoothed_half_period_direction(data, tolerance = tolerance)
+    amplitudes = smoothed_half_amplitude(data, periods)
+    min_vals = smoothed_half_min(data, periods)
+    max_vals = smoothed_half_max(data, periods)
+    rates = smoothed_half_rate(periods, amplitudes)
+    return {"period": periods, "direction": directions, "amplitude": amplitudes,
+            "min": min_vals, "max": max_vals, "rate": rates}
 
 
 ########  OFFSET 1/2 OSCILLATION  ########
@@ -180,22 +199,33 @@ def half_rate(periods, amplitudes):
 ## offset 1/2 oscillation period (per 1/2 cycle, defined as the # of values that are consecutively on the same side of the average value within a predefined window size that includes the first value of this period)
 ## offset 1/2 oscillation direction (per 1/2 cycle, whether the offset 1/2 oscillation period is above or below average; +/-)
 def offset_half_period_direction(data, window = 10, overlap = 0):
-    periods = [] ## tracks oscillation period length
-    periods_dir = [] ## tracks oscillation period direction
-    curr_period_len = 1
-    last_diff = data[1] - data[0]
-    last_direction = neg_zero_pos(last_diff)
-    for i, v in enumerate(data[2:]):
-        i = i+2
-        curr_diff = data[i] - data[i-1]
-        curr_direction = neg_zero_pos(curr_diff)
-        if curr_direction != last_direction and (abs(curr_diff) > tolerance):
-            periods.append(curr_period_len)
-            periods_dir.append(last_direction)
-            curr_period_len = 1
-            last_direction = curr_direction
-        else:
-            curr_period_len += 1
-    periods.append(curr_period_len)
-    periods_dir.append(curr_direction)
-    return periods, periods_dir
+    # periods = [] ## tracks oscillation period length
+    # periods_dir = [] ## tracks oscillation period direction
+    # curr_period_len = 1
+    # last_diff = data[1] - data[0]
+    # last_direction = neg_zero_pos(last_diff)
+    # for i, v in enumerate(data[2:]):
+    #     i = i+2
+    #     curr_diff = data[i] - data[i-1]
+    #     curr_direction = neg_zero_pos(curr_diff)
+    #     if curr_direction != last_direction and (abs(curr_diff) > tolerance):
+    #         periods.append(curr_period_len)
+    #         periods_dir.append(last_direction)
+    #         curr_period_len = 1
+    #         last_direction = curr_direction
+    #     else:
+    #         curr_period_len += 1
+    # periods.append(curr_period_len)
+    # periods_dir.append(curr_direction)
+    # return periods, periods_dir
+    pass
+
+## get all offset 1/2 oscillation stats
+def offset_half_oscillation_stats(data, window = 10, overlap = 0):
+    periods, directions = offset_half_period_direction(data)
+    amplitudes = offset_half_amplitude(data, periods)
+    min_vals = offset_half_min(data, periods)
+    max_vals = offset_half_max(data, periods)
+    rates = offset_half_rate(periods, amplitudes)
+    return {"period": periods, "direction": directions, "amplitude": amplitudes,
+            "min": min_vals, "max": max_vals, "rate": rates}
