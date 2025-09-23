@@ -320,7 +320,7 @@ class GFF:
         if index: return indices
         else: return self.get_i(indices)
     
-    def get_subfeatures_full(self, feature_ids, *features, index = False):
+    def get_subfeatures_full(self, feature_ids, *features, index = False, quiet = False):
         '''
         Get all features that are subfeatures of user-provided feature_ids
         AND subfeatures of those subfeatures, until there are no sub-sub...sub-features left.
@@ -331,7 +331,7 @@ class GFF:
         iteration_n = 0
         while True:
             iteration_n += 1
-            print(f"Executing iteration {iteration_n}")
+            if not quiet: print(f"Executing iteration {iteration_n}")
             curr_indices = self.get_subfeatures(feature_ids, index = True)
             feature_ids = set(itertools.chain(*[self.get_i(i).get_attr("ID") for i in curr_indices]))
             output_indices.extend(curr_indices)
@@ -463,6 +463,8 @@ class Annotation:
                         "attributes": self.attributes}
     def __eq__(self, other):
         return (self.generate_gff(standardise = True) == other.generate_gff(standardise = True))
+    def __hash__(self):
+        return hash('\t'.join(self.generate_gff(standardise = True)))
     def generate_attr(self, original = True, fields = None):
         if original: return self.attributes._raw
         else: return self.attributes.standardise_fields()

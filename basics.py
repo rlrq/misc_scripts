@@ -148,3 +148,12 @@ def order_elements_by_freq(iterable, exclude = []):
 ## index just tells the function which rank to start counting from
 def order_to_dict(iterable, index = 1):
     return {e: i+index for i, e in enumerate(iterable)}
+
+def split_iter_by_key(iterable, key):
+    output = {}
+    for e in iterable:
+        e_key = key(e)
+        if e_key not in output:
+            output[e_key] = []
+        output[e_key].append(e)
+    return output
