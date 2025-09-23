@@ -51,3 +51,12 @@ plot_fig <- function(grobs, layout_matrix, ...){
     p <- gridExtra::grid.arrange(grobs = grobs, layout_matrix = layout_matrix, ...)
     return(cowplot::ggdraw(p) + theme(plot.background = element_rect(fill = "white", colour = NA)))
 }
+
+## apply function to vector elements and store output as list, keeping original names
+slapply <- function(v, f){
+    output <- list()
+    for (e in v){
+        output[[e]] <- f(e)
+    }
+    return(output)
+}
