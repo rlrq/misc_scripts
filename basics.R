@@ -13,29 +13,29 @@ mkpath <- function(...){paste(..., sep = '/')}
 
 ## get file extension
 file_ext <- function(fname){
-  ext <- str_extract(fname, "(?<=/.)[^.]+$")
-  if (is.na(ext)){return('')}
-  return(ext)
+    ext <- stringr::str_extract(fname, "(?<=/.)[^.]+$")
+    if (is.na(ext)){return('')}
+    return(ext)
 }
 
 ## function to save plots with default PDF+PNG being default formats
 save_plot_noDefaultDir <- function(fname, p, w = 9.91, h = 5.44, units = "in", fmt = NA,
                                    dir = NA, ...){
-  dir.create(dir, showWarnings = FALSE)
-  if(is.na(fmt)){
-    if (file_ext(fname) != ''){
-      print(h)
-      ggsave(paste0(dir, "/", fname), 
-             p, w = w, h = h, units = units, ...) ##9.91x5.44in if legend.pos at side
-      return()
-    } else {
-      fmt = c("pdf", "png")
+    dir.create(dir, showWarnings = FALSE)
+    if(is.na(fmt)){
+        if (file_ext(fname) != ''){
+            print(h)
+            ggplot2::ggsave(paste0(dir, "/", fname), 
+                            p, w = w, h = h, units = units, ...) ##9.91x5.44in if legend.pos at side
+            return()
+        } else {
+            fmt = c("pdf", "png")
+        }
     }
-  }
-  for (ext in fmt){
-    ggsave(paste0(dir, "/", fname, ".", ext), 
-           p, w = w, h = h, units = units, ...) ##9.91x5.44in if legend.pos at side
-  }
+    for (ext in fmt){
+        ggplot2::ggsave(paste0(dir, "/", fname, ".", ext), 
+                        p, w = w, h = h, units = units, ...) ##9.91x5.44in if legend.pos at side
+    }
 }
 
 ## function to label grobs in top left corner to generate labelled subplots
