@@ -15,37 +15,37 @@ gt.Vertex.total_degree = lambda v:(v.in_degree() + v.out_degree())
 # gt.Vertex.collapsed_vertices = []
 # gt.Vertex.summarise_collapsed_vertices = lambda v,g,vprop:';'.join(str(g.vp[vprop][vcoll]) for vcoll in g.vp["collapsed_vertices"][v])
 
-class A():
-    def __init__(self, a):
-        self.a = a
-    def mult(self):
-        print("A.mult")
-        return self.a * 2
+# class A():
+#     def __init__(self, a):
+#         self.a = a
+#     def mult(self):
+#         print("A.mult")
+#         return self.a * 2
 
-class C():
-    def __init__(self, c):
-        self.c = c
-    def mult10(self):
-        print("C.mult10")
-        return self.c * 10
-    def mult(self):
-        print("C.mult")
-        return self.c * 5
+# class C():
+#     def __init__(self, c):
+#         self.c = c
+#     def mult10(self):
+#         print("C.mult10")
+#         return self.c * 10
+#     def mult(self):
+#         print("C.mult")
+#         return self.c * 5
 
-class B(A):
-    def __init__(self, b):
-        super().__init__(b)
-        self.c = C(b)
-    def mult(self):
-        print("B.mult")
-        return super().mult() * 2
-    def __getattr__(self, name):
-        return getattr(self.c, name)
+# class B(A):
+#     def __init__(self, b):
+#         super().__init__(b)
+#         self.c = C(b)
+#     def mult(self):
+#         print("B.mult")
+#         return super().mult() * 2
+#     def __getattr__(self, name):
+#         return getattr(self.c, name)
 
-b = B(2)
-b.mult() ## B.mult; A.mult; 8
-A.mult(b) ## A.mult; 4
-b.mult10() ## C.mult10
+# b = B(2)
+# b.mult() ## B.mult; A.mult; 8
+# A.mult(b) ## A.mult; 4
+# b.mult10() ## C.mult10
 
 
 def temporarily_undirected(func):
@@ -189,8 +189,15 @@ class CollapsedVertex(HashedVertex):
         return [label_f(v) for v in self.vertices()]
 
 class HashedGraph(gt.Graph):
-    def __init__(self, *args, hash_later = False, hash_leaves_only = False, **kwargs):
+    def __init__(self, *args, hash_later = False, hash_leaves_only = False, relabel_internal = False, **kwargs):
         super().__init__(*args, hashed = (not hash_later), **kwargs)
+        self._magnitude = math.ceil(math.log(len(self), 10))
+        self.assign_leaf()
+        self._internals_hashable = (not hash_leaves_only)
+        if relabel_internal:
+            ## relabels internal vertices uniquely so that they can be hashed
+            self._relabel_internal_vertices()
+        ## this variable decides whether to use original labels for hashing internal nodes (True = don't use)
         self.hash_leaves_only = hash_leaves_only
         self._hash = {} ## stores {<hashed id>: <index>}
         self._hash_hv = {} ## stores {<hashed id>: <HashedVertex>}
@@ -198,18 +205,35 @@ class HashedGraph(gt.Graph):
         if not hash_later:
             self._rehash()
             self._rehash_hv()
-        self._magnitude = math.ceil(len(self)/10)
         self.threads = []
         self._add_vp_vcoll()
-        self.assign_leaf()
+    def _relabel_internal_vertices(self, pattern = None):
+        if pattern is None:
+            pattern = "internal_{:0" + str(self._magnitude) + "d}"
+        if "ids" not in self.vp:
+            vprop_ids = self.new_vertex_property("string")
+            self.vp["ids"] = vprop_ids
+        else:
+            vprop_ids = self.vp["ids"]
+        internal_i = 0
+        for v in self.vertices():
+            if not self.vp.leaf[v]:
+                vprop_ids[v] = pattern.format(internal_i)
+                internal_i += 1
+        self._internals_hashable = True
+        return
     def set_vp_as_id(self, vp_name):
         if vp_name is None:
             return
+        if "ids" not in self.vp:
+            vprop_ids = self.new_vertex_property(vprop_source.value_type())
+            self.vp["ids"] = vprop_ids
+        else:
+            vprop_ids = self.vp["ids"]
         vprop_source = self.vp[vp_name]
-        vprop_ids = self.new_vertex_property(vprop_source.value_type())
-        self.vp["ids"] = vprop_ids
         for v in self.vertices():
-            if self.vp.leaf[v]: vprop_ids[v] = vprop_source[v]
+            if self.hash_leaves_only and not self.vp.leaf[v]: continue
+            vprop_ids[v] = vprop_source[v]
         self._rehash_all()
         return
     def _add_vp_vcoll(self): ## vcoll stores CollapsedVertex objects
@@ -230,7 +254,8 @@ class HashedGraph(gt.Graph):
         return
     def _rehash_one_index(self, v):
         """Update self._hash for a single vertex only. Takes gt.Vertex object."""
-        if self.hash_leaves_only and not self.vp.leaf[v]: return
+        # if self.hash_leaves_only and not self.vp.leaf[v]: return
+        if (not self._internals_hashable) and (not self.vp.leaf[v]): retuern
         hash_id = self.vp.ids[v]
         if self._hash.get(hash_id, None) != int(v):
             self._hash[hash_id] = int(v)
@@ -242,7 +267,8 @@ class HashedGraph(gt.Graph):
         return
     def _rehash_one_hv(self, v):
         """Update self._hash_hv for a single vertex only. Takes gt.Vertex object."""
-        if self.hash_leaves_only and not self.vp.leaf[v]: return
+        # if self.hash_leaves_only and not self.vp.leaf[v]: return
+        if (not self._internals_hashable) and (not self.vp.leaf[v]): return
         vertex_hash_id = self.vp.ids[v]
         if vertex_hash_id not in self._hash_hv:
             self._hash_hv[vertex_hash_id] = HashedVertex(self, vertex_hash_id)
@@ -344,7 +370,7 @@ class HashedGraph(gt.Graph):
         return jaccard_sim == 1
     def get_parent(self, X):
         if not self.is_sibling_set(X):
-            print("X is not a sibling set.")
+            # print("X is not a sibling set.")
             return None
         parents = list(set.intersection(*[set(v.all_neighbours()) for v in X]))
         if len(parents) != 1:
@@ -396,8 +422,8 @@ class HashedGraph(gt.Graph):
         """Returns true if vertices are from a single-edge tree. Assumes single-edge tree has exactly 1 edge and 2 vertices."""
         if not self.in_same_subgraph(v_list): return False
         if len(set(v_list)) != 2: return False
-        neighbours = set(itertools.chain(*[v.all_neighbours() for v in v_list]))
-        return neighbours == set(v_list)
+        neighbours = set(map(int, itertools.chain(*[v.all_neighbours() for v in v_list])))
+        return neighbours == set(map(int, v_list))
     def is_sibling_set(self, X):
         """
         'A sibling set is a set of leaves that are all siblings.'
@@ -750,6 +776,7 @@ def reduction_rule_2(F1, F2, X1, label_f1 = int, label_f2 = int,
     """
     if not F1.is_bss(X1):
         print("X1 is not a BSS.")
+        print([F1.vp.ids[v] for v in X1])
         return 0 ## operation not executed
     ## get equivalent X2 vertices
     X2 = get_X2(F1, F2, X1, label_f1 = label_f1, label_f2 = label_f2)
@@ -763,7 +790,7 @@ def reduction_rule_2(F1, F2, X1, label_f1 = int, label_f2 = int,
     v1 = None if len(v:=list(vcoll1.all_neighbours())) == 0 else v[0]
     v2 = None if len(v:=list(vcoll2.all_neighbours())) == 0 else v[0]
     if v1: _ = F1.contract_vertex(v1, e_property_map = econt_property_map)
-    if v2: _ = F1.contract_vertex(v2, e_property_map = econt_property_map)
+    if v2: _ = F2.contract_vertex(v2, e_property_map = econt_property_map)
     return 1
 
 ## apply reduction rule 2 on all BSS in F1
@@ -808,6 +835,8 @@ def apply_meta_steps_on_bss(F1, F2, label_f1 = int, label_f2 = int,
                             econt_property_map = {}, **rule_2_kwargs):
     bss_iter = 0
     executed = 0
+    total_removed = 0
+    total_shrunk = 0
     for X1 in F1.all_bss():
         bss_iter += 1
         X2 = get_X2(F1, F2, X1, label_f1 = label_f1, label_f2 = label_f2)
@@ -816,43 +845,32 @@ def apply_meta_steps_on_bss(F1, F2, label_f1 = int, label_f2 = int,
     ## apply reduction rules 1-2 and contractions on (F1, F2) until they are no longer applicable
     F1.contract(e_property_map = econt_property_map)
     F2.contract(e_property_map = econt_property_map)
-    apply_reduction_rules_exhaustive(F1, F2, label_f1 = label_f1, label_f2 = label_f2,
-                                     econt_property_map = econt_property_map, **rule_2_kwargs)
-    return bss_iter, executed
+    cycles, removed, shrunk = apply_reduction_rules_exhaustive(F1, F2, label_f1 = label_f1, label_f2 = label_f2,
+                                                               econt_property_map = econt_property_map, **rule_2_kwargs)
+    total_removed += removed
+    total_shrunk += shrunk
+    return bss_iter, executed, total_removed, total_shrunk
 
 def Apx_MAF(F1, F2, label_f1 = int, label_f2 = int, internal_unlabelled = True,
             econt_property_map = {}, **rule_2_kwargs):
     ## check if F1 and F2 have the same label-set
-    if set(label_f1(hv) for hv in F1.hvertices()) != set(label_f2(hv) for hv in F2.hvertices()):
+    if set(label_f1(hv) for hv in F1.hvertices() if F1.vp.leaf[hv]) != set(label_f2(hv) for hv in F2.hvertices() if F2.vp.leaf[hv]):
         print("F1 and F2 do NOT have the same label-set.")
         return
     label_f_kwargs = {"label_f1": label_f1, "label_f2": label_f2}
     ## apply reduction rules 1-2 and contractions on (F1, F2) until they are no longer applicable
     F1.contract(e_property_map = econt_property_map)
     F2.contract(e_property_map = econt_property_map)
-    apply_reduction_rules_exhaustive(F1, F2, **label_f_kwargs, **rule_2_kwargs)
-    bss_iter_l = []
+    _, total_removed, total_shrunk = apply_reduction_rules_exhaustive(F1, F2, **label_f_kwargs, **rule_2_kwargs)
+    total_operations = 0
+    ## execute meta-steps and reduction rules until F2 is a subgraph of F1
     while not F2.is_subgraph_v2(F1, mask_internal = internal_unlabelled, **label_f_kwargs):
-        bss_iter, executed = apply_meta_steps_on_bss(F1, F2, **label_f_kwargs)
-        bss_iter_l.append(bss_iter)
+        bss_iter, executed, removed, shrunk = apply_meta_steps_on_bss(F1, F2, **label_f_kwargs)
+        total_operations += executed
+        total_removed += removed
+        total_shrunk += shrunk
         if not bss_iter or not executed:
             break
-        # bss_iter.append(0)
-        # for X1 in F1.all_bss():
-        #     bss_iter[-1] += 1
-        #     X2 = get_X2(F1, F2, X1, **label_f_kwargs)
-        #     # executed = F2.meta_step_1(X2) ## if leaves are not in same tree
-        #     # if not executed: executed = F2.meta_step_2(X2) ## if X_2 is a sibling set
-        #     # if not executed: executed = F2.meta_step_3(X2) ## if X_2 contains a sibling set
-        #     # if not executed: executed = F2.meta_step_4(X2) ## if all leaves are in same tree but no 2 are siblings
-        #     # if executed: break ## continue on to next BSS if no meta-steps were applied to this one
-        #     executed = F2.meta_step_switch(X2)
-        #     if executed: break
-        # ## apply reduction rules 1-2 and contractions on (F1, F2) until they are no longer applicable
-        # F1.contract(e_property_map = econt_property_map)
-        # F2.contract(e_property_map = econt_property_map)
-        # apply_reduction_rules_exhaustive(F1, F2, **label_f_kwargs, **rule_2_kwargs,
-        #                                  econt_property_map = econt_property_map)
     ## get L-partitions (label partitions)
     F2_is_directed = F2.is_directed()
     F2.set_directed(False)
@@ -862,76 +880,76 @@ def Apx_MAF(F1, F2, label_f1 = int, label_f2 = int, internal_unlabelled = True,
     for v_i, component in enumerate(components):
         L_partition[component] = L_partition.get(component, []) + label_as_list(F2.hvertex(F2.vertex(v_i)), label_f2)
     L_partition = list(L_partition.values())
-    return L_partition, bss_iter
+    return L_partition, total_operations, total_removed, total_shrunk
 
-## some tests
-g = HashedGraph([("one","two"),("one","three"),("one","nine"),("zero","one"),("zero","four"),("four","five"),("four","six"),("nine","seven"),("seven","eight"),("seven","ten")])
-g.assign_leaf()
-g.vp.leaf[g.hvertex("two").index]
-g.vp.leaf[g.hvertex("two")] ## we can do this because HashedVertex.__int__ returns the index
-# x = g.draw()
+# ## some tests
+# g = HashedGraph([("one","two"),("one","three"),("one","nine"),("zero","one"),("zero","four"),("four","five"),("four","six"),("nine","seven"),("seven","eight"),("seven","ten")])
+# g.assign_leaf()
+# g.vp.leaf[g.hvertex("two").index]
+# g.vp.leaf[g.hvertex("two")] ## we can do this because HashedVertex.__int__ returns the index
+# # x = g.draw()
 
-ogi = g.new_vertex_property("int")
-g.vp["ogi"] = ogi
-for i,v in enumerate(g.vertices()):
-    ogi[v] = i
+# ogi = g.new_vertex_property("int")
+# g.vp["ogi"] = ogi
+# for i,v in enumerate(g.vertices()):
+#     ogi[v] = i
 
-# vcoll = g.new_vertex_property("object")
-# g.vp["vcoll"] = vcoll
+# # vcoll = g.new_vertex_property("object")
+# # g.vp["vcoll"] = vcoll
 
-x = g.hvertex("six")
-g.vp.ogi[x] ## 7
-x.ogi ## 7 (redirected by __getattr__ to g.vp.ogi[x])
-x.total_degree() ## correctly calls gt.Vertex method (well, a custom method that we added to it)
-g.is_bss([g.hvertex("eight"), g.hvertex("seven")])
-tmp = g.shrink([g.hvertex("eight"), g.hvertex("seven")]) ## should return None, because "eight" and "seven" isn't a bss
-tmp = g.shrink([g.hvertex("eight"), g.hvertex("ten")]) ## should return a HashedVertex object
-tmp.hi ## 'CollapsedVertex_00'
-tmp.vcoll.vp_all("leaf") ## [1,1] returns a list of the values of a given property of the vertices it collapsed
-# g.draw(vcolor = g.vp.leaf)
+# x = g.hvertex("six")
+# g.vp.ogi[x] ## 7
+# x.ogi ## 7 (redirected by __getattr__ to g.vp.ogi[x])
+# x.total_degree() ## correctly calls gt.Vertex method (well, a custom method that we added to it)
+# g.is_bss([g.hvertex("eight"), g.hvertex("seven")])
+# tmp = g.shrink([g.hvertex("eight"), g.hvertex("seven")]) ## should return None, because "eight" and "seven" isn't a bss
+# tmp = g.shrink([g.hvertex("eight"), g.hvertex("ten")]) ## should return a HashedVertex object
+# tmp.hi ## 'CollapsedVertex_00'
+# tmp.vcoll.vp_all("leaf") ## [1,1] returns a list of the values of a given property of the vertices it collapsed
+# # g.draw(vcolor = g.vp.leaf)
 
-g.contract() ## 3
-# g.draw(vcolor = g.vp.is_vcoll)
+# g.contract() ## 3
+# # g.draw(vcolor = g.vp.is_vcoll)
 
-g.is_bss([g.hvertex("two"), g.hvertex("three"), g.hvertex("CollapsedVertex_00")])
-tmp2 = g.shrink([g.hvertex("two"), g.hvertex("three"), g.hvertex("CollapsedVertex_00")])
-tmp2.vcoll.vp_all("ids") ## ['two', 'three', 'eight', 'ten'] successfully expands all collapsed vertices (even 2nd level ones)
-# g.draw(vcolor = g.vp.is_vcoll)
-# g.draw(vcolor = g.vp.leaf)
+# g.is_bss([g.hvertex("two"), g.hvertex("three"), g.hvertex("CollapsedVertex_00")])
+# tmp2 = g.shrink([g.hvertex("two"), g.hvertex("three"), g.hvertex("CollapsedVertex_00")])
+# tmp2.vcoll.vp_all("ids") ## ['two', 'three', 'eight', 'ten'] successfully expands all collapsed vertices (even 2nd level ones)
+# # g.draw(vcolor = g.vp.is_vcoll)
+# # g.draw(vcolor = g.vp.leaf)
 
-g1 = HashedGraph([("one","two"),("one","three"),("one","nine"),("zero","one"),("zero","four"),("four","five"),("four","six"),("nine","seven"),("seven","eight"),("seven","ten")])
-g2 = HashedGraph([("zero","one"),("zero","four"),("four","five"),("four","six"),("nine","seven"),("seven","eight"),("seven","ten"),("one","two"),("one","three"),("one","nine")]) ## different edge/vertex order
-g3 = HashedGraph([("zero","one"),("zero","four"),("four","five"),("four","six"),("nine","seven"),("seven","eight"),("seven","ten"),("one","two"),("one","three"),("nine","one")]) ## 1 different edge direction from g2
-g2.is_subgraph(g1) ## False; default comparison is between vertex indices
-g1.is_subgraph(g2, label_f1 = lambda hv:hv.hi, label_f2 = lambda hv:hv.hi) ## True
-g2.is_subgraph(g1, label_f1 = lambda hv:hv.hi, label_f2 = lambda hv:hv.hi) ## True
-g3.is_subgraph(g2) ## True (default behaviour compares undirected versions of the graphs)
-g3.is_subgraph(g2, preserve_direction = True) ## False
-g2.remove_edge(g2.edge(g2.hvertex("one"), g2.hvertex("two"))) ## now edges g2 < g1
-g2.is_subgraph(g1, label_f1 = lambda hv:hv.hi, label_f2 = lambda hv:hv.hi) ## True
-g1.is_subgraph(g2, label_f1 = lambda hv:hv.hi, label_f2 = lambda hv:hv.hi) ## False
+# g1 = HashedGraph([("one","two"),("one","three"),("one","nine"),("zero","one"),("zero","four"),("four","five"),("four","six"),("nine","seven"),("seven","eight"),("seven","ten")])
+# g2 = HashedGraph([("zero","one"),("zero","four"),("four","five"),("four","six"),("nine","seven"),("seven","eight"),("seven","ten"),("one","two"),("one","three"),("one","nine")]) ## different edge/vertex order
+# g3 = HashedGraph([("zero","one"),("zero","four"),("four","five"),("four","six"),("nine","seven"),("seven","eight"),("seven","ten"),("one","two"),("one","three"),("nine","one")]) ## 1 different edge direction from g2
+# g2.is_subgraph(g1) ## False; default comparison is between vertex indices
+# g1.is_subgraph(g2, label_f1 = lambda hv:hv.hi, label_f2 = lambda hv:hv.hi) ## True
+# g2.is_subgraph(g1, label_f1 = lambda hv:hv.hi, label_f2 = lambda hv:hv.hi) ## True
+# g3.is_subgraph(g2) ## True (default behaviour compares undirected versions of the graphs)
+# g3.is_subgraph(g2, preserve_direction = True) ## False
+# g2.remove_edge(g2.edge(g2.hvertex("one"), g2.hvertex("two"))) ## now edges g2 < g1
+# g2.is_subgraph(g1, label_f1 = lambda hv:hv.hi, label_f2 = lambda hv:hv.hi) ## True
+# g1.is_subgraph(g2, label_f1 = lambda hv:hv.hi, label_f2 = lambda hv:hv.hi) ## False
 
-label_no_internals = lambda hv:('' if not hv.leaf else hv.ids)
-## test how providing some labels work
-## I like it. It matches the vertices to the labels and if multiple have the same label then only their relative toplogy to the vertices with unique labels matter.
-l2 = lambda hv:('' if not hv.leaf else (hv.ids if hv.ids in ["two", "three"] else '')) ## 4 maps
-l2 = lambda hv:('' if not hv.leaf else (hv.ids if hv.ids in ["two", "three", "five"] else '')) ## 2 maps
-svp1 = g1.new_vertex_property("string")
-for v in g1.hvertices():
-    svp1[v] = str(l2(v))
+# label_no_internals = lambda hv:('' if not hv.leaf else hv.ids)
+# ## test how providing some labels work
+# ## I like it. It matches the vertices to the labels and if multiple have the same label then only their relative toplogy to the vertices with unique labels matter.
+# l2 = lambda hv:('' if not hv.leaf else (hv.ids if hv.ids in ["two", "three"] else '')) ## 4 maps
+# l2 = lambda hv:('' if not hv.leaf else (hv.ids if hv.ids in ["two", "three", "five"] else '')) ## 2 maps
+# svp1 = g1.new_vertex_property("string")
+# for v in g1.hvertices():
+#     svp1[v] = str(l2(v))
 
-svp2 = g2.new_vertex_property("string")
-for v in g2.hvertices():
-    svp2[v] = str(l2(v))
+# svp2 = g2.new_vertex_property("string")
+# for v in g2.hvertices():
+#     svp2[v] = str(l2(v))
 
-svp3 = g3.new_vertex_property("string")
-for v in g3.hvertices():
-    svp3[v] = str(l2(v))
+# svp3 = g3.new_vertex_property("string")
+# for v in g3.hvertices():
+#     svp3[v] = str(l2(v))
 
-gt.subgraph_isomorphism(g1, g2, vertex_label = (svp1, svp2))
-gt.subgraph_isomorphism(g1, g3, vertex_label = (svp1, svp3)) ## no map
-g1.set_directed(False); g3.set_directed(False)
-gt.subgraph_isomorphism(g1, g3, vertex_label = (svp1, svp3)) ## 2 maps
+# gt.subgraph_isomorphism(g1, g2, vertex_label = (svp1, svp2))
+# gt.subgraph_isomorphism(g1, g3, vertex_label = (svp1, svp3)) ## no map
+# g1.set_directed(False); g3.set_directed(False)
+# gt.subgraph_isomorphism(g1, g3, vertex_label = (svp1, svp3)) ## 2 maps
 
 
 ## if vertex is a collapsed vertex, use vertex's hashed ID instead of applying label_f
@@ -956,8 +974,8 @@ def make_groups_scalar(g, *groups):
         vp[int(v)] = groups_inv.get(int(v), 0)
     return vp
 
-## test meta steps
-zero = "zero"; one = "one"; two = "two"; three = "three"; four = "four"; five = "five"; six = "six"; seven = "seven"; eight = "eight"; nine = "nine"; ten = "ten"; eleven = "eleven"; twelve = "twelve"; thirteen = "thirteen"; fourteen = "fourteen"
+# ## test meta steps
+# zero = "zero"; one = "one"; two = "two"; three = "three"; four = "four"; five = "five"; six = "six"; seven = "seven"; eight = "eight"; nine = "nine"; ten = "ten"; eleven = "eleven"; twelve = "twelve"; thirteen = "thirteen"; fourteen = "fourteen"
 # g = HashedGraph([(zero,one),(zero,two),(zero,three),(zero,four),(zero,five),(zero,six),(six,seven),(six,eight),(six,nine),(six,ten),(ten,eleven),(ten,twelve),(ten,thirteen)])
 # X2 = g.subset_hvertices(one, thirteen)
 # vp_groups = make_groups_scalar(g, X2, g.subset_hvertices(two, three, four, five), g.subset_hvertices(seven, eight, nine), g.subset_hvertices(eleven, twelve))
@@ -1007,17 +1025,6 @@ attr_map = {"seqlen": lambda n:seqlens[n.name],
             "accid": lambda n:get_accid(n.name),
             "gid": lambda n:get_gid(n.name)}
 
-## read & process trees
-t1 = newick.read(nwk1)[0]
-t1.set_leaf_attributes(attr_map)
-t1.prune_leaves_by_group("accid", lambda leaves:max(leaves, key = lambda leaf:leaf.seqlen), in_place = True)
-t1.match = lambda n:n.accid
-t2 = newick.read(nwk2)[0]
-t2.set_leaf_attributes(attr_map)
-t2.prune_leaves_by_group("accid", lambda leaves:max(leaves, key = lambda leaf:leaf.seqlen), in_place = True)
-ne.prune_unique_leaves(t1, t2, match_function = lambda n:n.accid, in_place = True)
-t2.match = lambda n:n.accid
-
 ## convert to edge list (text file, format based on https://docs.oracle.com/en/database/oracle/property-graph/23.1/spgdg/edge-list-edge_list.html)
 def parse_if_non_numeric(v, f):
     try:
@@ -1028,12 +1035,14 @@ def parse_if_non_numeric(v, f):
     except TypeError:
         return ''
 
-def edgelist_to_hashed_graph(fin, hash_id, graph_class = HashedGraph, **kwargs):
+def edgelist_to_hashed_graph(fin, hash_id, graph_class = HashedGraph,
+                             hash_leaves_only = True, relabel_internal = True, **kwargs):
     v_properties, e_properties, v_dict, e_list = ne.parse_edgelist(fin, **kwargs)
     eprops = [(eprop, ne.reformat_type(ne.infer_type(e[i+2] for e in e_list).__name__))
               for i, eprop in enumerate(e_properties)]
     hash_id_index = v_properties.index(hash_id)
-    g = graph_class(e_list, eprops = eprops, hash_later = True)
+    g = graph_class(e_list, eprops = eprops, hash_later = True,
+                    hash_leaves_only = hash_leaves_only, relabel_internal = relabel_internal)
     ## assign vertex properties
     ogi = g.new_vertex_property("int") ## original index
     g.vp["ogi"] = ogi
@@ -1053,14 +1062,13 @@ def edgelist_to_hashed_graph(fin, hash_id, graph_class = HashedGraph, **kwargs):
     return g
 
 
-edgelist_1 = "/mnt/chaelab/rachelle/tmp/t1.edgelist"
-edgelist_2 = "/mnt/chaelab/rachelle/tmp/t2.edgelist"
 v_attr_map = {
     "seqlen": lambda n:seqlens.get(n.name, ''),
     "accid": lambda n:parse_if_non_numeric(n.name, get_accid),
     "gid": lambda n:parse_if_non_numeric(n.name, get_gid),
-    "leaf": lambda n:n.is_leaf,
-    "collapsed_vertices": lambda n:[]}
+    "leaf": lambda n:n.is_leaf# ,
+    # "collapsed_vertices": lambda n:[]
+}
 edgelist_kwargs = {
     "v_label_function": lambda v:v.name,
     "e_label_function": lambda src,dst:'',
@@ -1077,8 +1085,8 @@ vcoll_attr_map = {
     "seqlen": lambda g,v:-1,
     "accid": lambda g,v:(';'.join(sorted(get_vprop_recursively(g, v, "accid")))),
     "gid": lambda g,v:(';'.join(sorted(get_vprop_recursively(g, v, "gid")))),
-    "leaf": lambda g,v:True,
-    "collapsed_vertices": lambda g,n:[]
+    "leaf": lambda g,v:True# ,
+    # "collapsed_vertices": lambda g,n:[]
 }
 ecoll_attr_map = {
     "length": lambda g,e:-1
@@ -1087,13 +1095,40 @@ econt_attr_map = {
     "length": lambda g,v:sum(g.ep["length"][e] for e in v.all_edges())
 }
 
+## read & process trees
+t1 = newick.read(nwk1)[0]
+t1.set_leaf_attributes(attr_map)
+t1.prune_leaves_by_group("accid", lambda leaves:max(leaves, key = lambda leaf:leaf.seqlen), in_place = True)
+t1.match = lambda n:n.accid
+t2 = newick.read(nwk2)[0]
+t2.set_leaf_attributes(attr_map)
+t2.prune_leaves_by_group("accid", lambda leaves:max(leaves, key = lambda leaf:leaf.seqlen), in_place = True)
+ne.prune_unique_leaves(t1, t2, match_function = lambda n:n.accid, in_place = True)
+t2.match = lambda n:n.accid
+## let's try something, where we use the same tree for t1 and t2 but swap two leaf labels in t2
+t3 = newick.read(nwk1)[0]
+t3.set_leaf_attributes(attr_map)
+t3.prune_leaves_by_group("accid", lambda leaves:max(leaves, key = lambda leaf:leaf.seqlen), in_place = True)
+ne.prune_unique_leaves(t1, t3, match_function = lambda n:n.accid, in_place = True)
+t3.match = lambda n:n.accid
+t3_leaves = t3.get_leaves()
+t1_leaves = t1.get_leaves()
+t3_leaves[0].name = t1_leaves[20].name ## 'Reference|ANGE-B-10.g40|CDS|ANGE-B-10.g40.t1'
+t3_leaves[20].name = t1_leaves[0].name ## 'Reference|SALE-A-10.g39|CDS|SALE-A-10.g39.t1'
+
 ## convert to edgelist
 tmp1 = "/mnt/chaelab/rachelle/tmp1.txt"
 tmp2 = "/mnt/chaelab/rachelle/tmp2.nwk"
+tmp3 = "/mnt/chaelab/rachelle/tmp3.nwk"
+edgelist_1 = "/mnt/chaelab/rachelle/tmp/t1.edgelist"
+edgelist_2 = "/mnt/chaelab/rachelle/tmp/t2.edgelist"
+edgelist_3 = "/mnt/chaelab/rachelle/tmp/t3.edgelist"
 newick.write(t1, tmp1)
 newick.write(t2, tmp2)
+newick.write(t3, tmp3)
 ne.newick_to_edgelist(tmp1, edgelist_1, **edgelist_kwargs)
 ne.newick_to_edgelist(tmp2, edgelist_2, **edgelist_kwargs)
+ne.newick_to_edgelist(tmp3, edgelist_3, **edgelist_kwargs)
 
 ## read edgelist into graph-tool graph
 g1 = edgelist_to_hashed_graph(edgelist_1, "label", graph_class = AxpMAFgraph,
@@ -1102,28 +1137,285 @@ g1 = edgelist_to_hashed_graph(edgelist_1, "label", graph_class = AxpMAFgraph,
 g2 = edgelist_to_hashed_graph(edgelist_2, "label", graph_class = AxpMAFgraph,
                               v_property_coerce = v_property_coerce,
                               e_property_coerce = e_property_coerce)
+g3 = edgelist_to_hashed_graph(edgelist_3, "label", graph_class = AxpMAFgraph,
+                              v_property_coerce = v_property_coerce,
+                              e_property_coerce = e_property_coerce)
+g0 = edgelist_to_hashed_graph(edgelist_1, "label", graph_class = AxpMAFgraph,
+                              v_property_coerce = v_property_coerce,
+                              e_property_coerce = e_property_coerce)
+
 ## undirected
 g1.set_directed(False)
 g2.set_directed(False)
+g3.set_directed(False)
 
 # ## draw
 # g1.draw()
 # g2.draw()
 
-tmp = Apx_MAF(g1, g2, label_f1 = use_vcoll_id(lambda hv:hv.accid), label_f2 = use_vcoll_id(lambda hv:hv.accid))
+## the pair of trees with one pair of leaves swapped
+am_1swap = Apx_MAF(g1, g3, label_f1 = use_vcoll_id(lambda hv:hv.accid), label_f2 = use_vcoll_id(lambda hv:hv.accid))
+am_1swap[1:] ## (2, 5, 68) ## L-partitions, # meta step operations, # single-vertex trees removed, # bss shrunk
+g1.draw()
+g3.draw()
+g0.draw(vcolour = make_groups_scalar(g0, g0.subset_hvertices('Reference|ANGE-B-10.g40|CDS|ANGE-B-10.g40.t1', 'Reference|SALE-A-10.g39|CDS|SALE-A-10.g39.t1')))
+tmp2 = [(g0.subset_hvertices(v.hi) if not v.is_vcoll else g0.subset_hvertices(*v.vcoll.vp_all("ids"))) for v in g1.hvertices()]
+g0.draw(vcolour = make_groups_scalar(g0, *tmp2))
 
-g2_comp = gt.label_components(g2)[0].a
-g2_comp_d = {g2.vp.accid[i]: int(v) for i, v in enumerate(g2_comp) if g2.vp.leaf[i]}
-g2_comp_d_rev = invert_dict(g2_comp_d)
-g1_accid_map = {g1.vp.accid[v]: g1.vp.ids[v] for v in g1.vertices() if g1.vp.leaf[v]}
-g2_comp_g1 = {comp_i: [g1_accid_map[accid] for accid in accids] for comp_i, accids in g2_comp_d_rev.items()}
 
-g1.draw(vcolor = make_groups_scalar(g1, g1.subset_hvertices(*g2_comp_g1[0]), g1.subset_hvertices(*g2_comp_g1[1]), g1.subset_hvertices(*g2_comp_g1[3])))
-g1.draw(vcolor = g1.vp.leaf)
-g2.draw(vcolor = g2.vp.leaf)
-g1.draw(vcolor = g1.vp.is_vcoll)
-g2.draw(vcolor = g2.vp.is_vcoll)
+## the pair of trees from different ADR1 genes
+g4 = edgelist_to_hashed_graph(edgelist_1, "label", graph_class = AxpMAFgraph,
+                              v_property_coerce = v_property_coerce,
+                              e_property_coerce = e_property_coerce)
+g4.set_directed(False)
+am_adr1s = Apx_MAF(g4, g2, label_f1 = use_vcoll_id(lambda hv:hv.accid), label_f2 = use_vcoll_id(lambda hv:hv.accid))
+am_adr1s[1:] ## (54, 124, 1) ## L-partitions, # meta step operations, # single-vertex trees removed, # bss shrunk
+g4.draw()
+g2.draw()
+tmp2 = [(g0.subset_hvertices(v.hi) if not v.is_vcoll else g0.subset_hvertices(*v.vcoll.vp_all("ids"))) for v in g4.hvertices()]
+g0.draw(vcolour = make_groups_scalar(g0, *tmp2))
 
-label_f_kwargs = {"label_f1": use_vcoll_id(lambda hv:hv.accid), "label_f2": use_vcoll_id(lambda hv:hv.accid)}
-apply_reduction_rules_exhaustive(g1, g2, **label_f_kwargs)
 
+# g2_comp = gt.label_components(g2)[0].a
+# g2_comp_d = {g2.vp.accid[i]: int(v) for i, v in enumerate(g2_comp) if g2.vp.leaf[i]}
+# g2_comp_d_rev = invert_dict(g2_comp_d)
+# g1_accid_map = {g1.vp.accid[v]: g1.vp.ids[v] for v in g1.vertices() if g1.vp.leaf[v]}
+# g2_comp_g1 = {comp_i: [g1_accid_map[accid] for accid in accids] for comp_i, accids in g2_comp_d_rev.items()}
+
+# g1.draw(vcolor = make_groups_scalar(g1, g1.subset_hvertices(*g2_comp_g1[0]), g1.subset_hvertices(*g2_comp_g1[1]), g1.subset_hvertices(*g2_comp_g1[3])))
+# g1.draw(vcolor = g1.vp.leaf)
+# g2.draw(vcolor = g2.vp.leaf)
+# g1.draw(vcolor = g1.vp.is_vcoll)
+# g2.draw(vcolor = g2.vp.is_vcoll)
+
+# label_f_kwargs = {"label_f1": use_vcoll_id(lambda hv:hv.accid), "label_f2": use_vcoll_id(lambda hv:hv.accid)}
+# apply_reduction_rules_exhaustive(g1, g2, **label_f_kwargs)
+
+
+
+class ParaMAFgraph(HashedGraph):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        return
+    def cut(self, hv):
+        pass
+    def branching_rule_1(self, X):
+        """Case 1. Leaves in X_2 are not in the same tree in F_2."""
+        ## Let u_2 and v_2 be two leaves in X_2 that are in different trees in F_2,
+        for i in range(len(X)-1):
+            u = X[i]
+            for j in range(i+1,len(X)):
+                v = X[j]
+                if not self.in_same_subgraph([u, v]):
+                    ## then decrease k by 1, and branch two ways: [W1] cut u_2 in F_2; and [W2] cut v_2 in F_2.
+                    pass
+                    return 1
+        return 0 ## operation not executed (yeah I know that 0 usually means no errors)
+    def branching_rule_2(self, X):
+        """Case 2. X_2 is a sibling set in F_2."""
+        if (not self.is_bss(X)
+            and self.is_sibling_set(X)):
+            E_double_prime = self.E_double_prime(X)
+        else:
+            return 0 ## operation not executed
+        ## fix a leaf u_2 in X_2, and let E_2 = {e_1,...,e_h}, h>=2, be the set of edges that are incident to the
+        ## parent p_2 of X_2 but not to any leaf in X_2. Then branch into h+1 ways:
+        ## [W(0)] remove all edges incident to X_2 except the one incident to u_2 and decrease k by |X_2|-1;
+        ## and, for each 1<=i<=h, [W(i)] remove all edges in E_2 except e_i and decrease k by h-1
+        #### TODO
+        return 1
+    def branching_rule_3(self, X):
+        """Case 3. X_2 contains a sibling set Y_2 with |Y_2|>=2. Assumption: X_2 is not a sibling set."""
+        ## Assumption: X is not a sibling set. assume also: graph is acyclic
+        ## Find a sibling set
+        ## 'Let u_2, v_2 be elements of Y_2'
+        if len(X) < 3: return 0 ## operation not executed. Too few vertices
+        Y = None
+        break_loop = False
+        for i in range(len(X)-1):
+            u = X[i]
+            for j in range(i+1,len(X)):
+                v = X[j]
+                if self.is_sibling_set([u, v]):
+                    Y = [u, v]
+                    break_loop = True
+                    break
+            if break_loop: break
+        if Y is None: return 0 ## operation not executed. Premise that X_2 contains a sibling set Y_2 is false
+        #### TODO: validate that the bit of code above is in line with the algorithm
+        ## branch into three ways:
+        ## [W1] cut all leaves in Y_2 except u_2 in F_2 and decrease k by |Y_2|-1;
+        ## [W2] cut z_2 in F_2 and decrease k by 1;
+        ## and [W3] cut all edges in E_2 in F_2 and decrease k by |E_2|
+        pass
+    def branching_rule_4(self, X):
+        """Case 4. All leaves in X_2 are in the same tree in F_2 but no two are siblings"""
+        ## Assumption: there are no sibling sets.
+        ## Let u_2, v_2 be a elements of X_2 such that the parent p_2 of u_2 has degree 2 in F_2[l(X_2)].
+        ## (l(X_2) is the set of labels for leaves X_2)
+        ## (F_2[l(X_2)] is presumably the tree prune of all leaves except X_2; subforest of F_2 induced by l(X_2))
+        for i in range(len(X)-1):
+            u = X[i]
+            for j in range(i+1,len(X)):
+                v = X[j]
+                if self.is_sibling_set([u, v]):
+                    return 0 ## sibling sets violate the premise
+        #### TODO: validate that the bit of code above is in line with the algorithm
+        ## We split this case into three subcases depending on the size |X_1|
+        ## and the number of unlabelled vertices on a path connecting two leaves in X_2.
+        ## Let u_2 and v_2 be two arbitrary leaves in X_2, and let P be the path in F_2 that connects u_2 and v_2.
+        ## Denote by int(P) = {w_1,...,w_h}, h>=2, the set of vertices on P that are unlabelled.
+        ## Subcase 4.1: the path P consists of at least five vertices, i.e. h>=3. (Fig. 2(B))
+        ## Branching rule 4.1: letu_2 and v_2 be leaves in X_2 such that the path P = {u_2,w_1,...,w_h,v_2} in F_2
+        ## satisfies h>=3. Then branch into (h+2) eays:
+        ## [W1] cut u_2 in F_2 and decrease k by 1;
+        ## [W2] but v_2 in F_2 and decrease k by 1;
+        ## and, for each 1<=i<=h, [W(2+1)] cut the edges incident to int(P)\{w_i} but not on the path P, and decrease k
+        ## by the number of edges cut.
+        ## Subcase 4.2: E_2 = {e_1,...,e_h} with e>=3. (Fig. 2(C))
+        ## Brancing rule 4.2: branch into (2+h) ways:
+        ## [W1] cut u_2 in F_2 and decrease k by 1;
+        ## [W2] cut v_2 in F_2 and decrease k by 1;
+        ## and, for each 1<=i<=h, [W(2+i)] for the edge e_i in E_2, cut all edges in E_2 except e_i and decrease k by h-1
+        ## Subcase 4.3: E_2={e_1,e_2}. (Fig. 2(D))
+        ## Branching rule 4.3: decrease k by 1, and branch into three ways:
+        ## [W0] cut u_2 in F_2;
+        ## [W1] cut e_1 in E_2;
+        ## and [W2] cut e_2 in E_2.
+        pass
+    # def E_double_prime(self, X):
+    #     """
+    #     Sibling set X has parent p and the degree of p is at least |X|+2.
+    #     Let E" be the set of edges that are incident to the parent p of X but not incident to the leaves in X.
+    #     """
+    #     if not self.is_sibling_set(X): return []
+    #     parent = self.get_parent(X) ## 1 parent
+    #     X_indices = set(int(v) for v in X)
+    #     output = []
+    #     for e in parent.all_edges():
+    #         ## skip if edge is connected to any vertex in X
+    #         if int(e.source()) in X_indices or int(e.target()) in X_indices: continue
+    #         output.append(e)
+    #     return output
+    # def meta_step_2(self, X):
+    #     """Case 2. X_2 is a sibling set in F_2."""
+    #     if (not self.is_bss(X)
+    #         and self.is_sibling_set(X)):
+    #         E_double_prime = self.E_double_prime(X)
+    #     else:
+    #         return 0 ## operation not executed
+    #     ## get edges between X and parent
+    #     X_indices = set(int(v) for v in X)
+    #     parent = self.get_parent(X)
+    #     E_X_parent = [e for e in parent.all_edges() if
+    #                   (int(e.source()) in X_indices
+    #                    or int(e.target()) in X_indices)]
+    #     ## meta-step 2.1
+    #     ## if |E"| > |X_2|, then pick any set E_1 of |X_2|-1 edges incident to the leaves in X_2,
+    #     ## and pick any set E_2 of |X_2| edges in E", remove all edges in E_1 union E_2
+    #     if len(E_double_prime) > len(X):
+    #         E1 = E_X_parent[:-1] ## pick any set E_1 of |X_2|-1 edges incident to leaves in X
+    #         E2 = E_double_prime[:len(X)] ## pick any set E_2 of |X_2| edges in E"
+    #         for e in E1 + E2:
+    #             self.remove_edge(e)
+    #     ## meta-step 2.2
+    #     ## if |E"| <= |X_2|, then pick any set E'_1 of |E"|-1 edges incident to the leaves in X_2,
+    #     ## and remove all edges in E'_1 union E".
+    #     else:
+    #         E_prime_1 = E_X_parent[:(len(E_double_prime)-1)] ## pick any set E'_1 of |E"|-1 edges incident to the leaves in X_2
+    #         for e in E_prime_1 + E_double_prime:
+    #             self.remove_edge(e)
+    #     return 1 ## operation executed successfully
+    # @temporarily_undirected
+    # def meta_step_3(self, X, preserve_direction = False):
+    #     """Case 3. X_2 contains a sibling set Y_2 with |Y_2|>=2. Assumption: X_2 is not a sibling set."""
+    #     ## Assumption: X is not a sibling set. assume also: graph is acyclic
+    #     ## Find a sibling set
+    #     ## 'Let u_2, v_2 be elements of Y_2'
+    #     if len(X) < 3: return 0 ## operation not executed. Too few vertices
+    #     Y = None
+    #     break_loop = False
+    #     for i in range(len(X)-1):
+    #         u = X[i]
+    #         for j in range(i+1,len(X)):
+    #             v = X[j]
+    #             if self.is_sibling_set([u, v]):
+    #                 Y = [u, v]
+    #                 break_loop = True
+    #                 break
+    #         if break_loop: break
+    #     if Y is None: return 0 ## operation not executed. Premise that X_2 contains a sibling set Y_2 is false
+    #     ## 'Let w_2 be a leaf in X_2 that is not a sibling of u_2 and v_2.'
+    #     Y_parent = self.get_parent(Y) ## 1 parent
+    #     for w in X:
+    #         w_neighbour_indices = [int(n) for n in w.all_neighbours()]
+    #         if Y_parent not in w_neighbour_indices: break ## get first vertex without u+v's parent as a neighbour
+    #     ## 'Let e be an edge incident to the parent of w_2 but not on the path between u_w and w_2.'
+    #     # g_is_directed = self.is_directed()
+    #     # self.set_directed(False) ## set undirected to simplify steps
+    #     path_vertices = gt.shortest_path(self, u, w)[0]
+    #     path_vertices_index = [int(n) for n in path_vertices]
+    #     w_parent = path_vertices[-2] ## -1 is w
+    #     for n in w_parent.all_neighbours():
+    #         ## check if n is along path between u & w
+    #         if int(n) not in path_vertices_index:
+    #             ## if not along path, get edge between n & w_parent
+    #             e = self.edge(n, w_parent)
+    #             break
+    #     ## 'Then remove the edge e, the edge e_u incident to u, and the edge e_w incident to w'
+    #     self.remove_edge(e)
+    #     self.remove_edge(self.edge(u, Y_parent))
+    #     self.remove_edge(self.edge(w, w_parent))
+    #     # ## set direction back to original (even though this operation only really works on undirected graphs anyway...)
+    #     # self.set_directed(g_is_directed)
+    #     return 1 ## operation executed successfully
+    # @temporarily_undirected
+    # def meta_step_4(self, X, preserve_direction = False):
+    #     """Case 4. All leaves in X_2 are in the same tree in F_2 but no two are siblings"""
+    #     ## Assumption: there are no sibling sets.
+    #     ## Let u_2, v_2 be a elements of X_2 such that the parent p_2 of u_2 has degree 2 in F_2[l(X_2)].
+    #     ## (l(X_2) is the set of labels for leaves X_2)
+    #     ## (F_2[l(X_2)] is presumably the tree prune of all leaves except X_2; subforest of F_2 induced by l(X_2))
+    #     for i in range(len(X)-1):
+    #         u = X[i]
+    #         for j in range(i+1,len(X)):
+    #             v = X[j]
+    #             if self.is_sibling_set([u, v]):
+    #                 return 0 ## sibling sets violate the premise
+    #     ## Let e be an edge in F_2 that is incident to p_2 but not on the path P_{uv} between u_2 and v_2.
+    #     # g_is_directed = self.is_directed()
+    #     # self.set_directed(False) ## set undirected to simplify steps
+    #     path_vertices = gt.shortest_path(self, u, v)[0]
+    #     path_vertices_index = [int(n) for n in path_vertices]
+    #     p = path_vertices[1] ## 0 is u, -1 is v
+    #     e = None
+    #     for n in p.all_neighbours():
+    #         ## check if n is along path between u & w
+    #         if int(n) not in path_vertices_index:
+    #             ## if not along path, get edge between n & p
+    #             e = self.edge(n, p)
+    #             break
+    #     ## Then cut the edge e, the edge e_u incident to u_2, and the edge e_v incident to v_2.
+    #     if e is None: return 0
+    #     # try:
+    #     #     self.remove_edge(e)
+    #     # except Exception as er:
+    #     #     print(path_vertices)
+    #     #     print(p.all_neighbours())
+    #     #     print([int(n) for n in path_vertices])
+    #     #     print(p)
+    #     #     print(n)
+    #     #     raise er
+    #     self.remove_edge(self.edge(u, p))
+    #     self.remove_edge(self.edge(v, path_vertices[-2]))
+    #     # ## set direction back to original (even though this operation only really works on undirected graphs anyway...)
+    #     # self.set_directed(g_is_directed)
+    #     return 1 ## operation executed successfully
+    # def meta_step_switch(self, X, preserve_direction = False):
+    #     """Switch for meta-steps"""
+    #     executed = self.meta_step_1(X) ## if leaves are not in same tree
+    #     if not executed: executed = self.meta_step_2(X) ## if X_2 is a sibling set
+    #     if not executed: executed = self.meta_step_3(X) ## if X_2 contains a sibling set
+    #     if not executed: executed = self.meta_step_4(X) ## if all leaves are in same tree but no 2 are siblings
+    #     ## return whether any meta-steps were executed (0/1)
+    #     return executed
