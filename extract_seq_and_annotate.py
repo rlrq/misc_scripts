@@ -1,7 +1,7 @@
 import sys
 sys.path.append("/mnt/chaelab/rachelle/src")
 
-from reference import AnnotatedFasta
+from reference import AnnotatedFasta, ranges_union
 from annotation import GFF, Annotation
 from fasta_manip import dict_to_fasta
 from pathlib import Path
@@ -13,7 +13,8 @@ def get_flanked_seq(ref, fids, flank = 200, feature_type = "gene",
                     gff_subset = None,
                     fasta_out = None, gff_out = None,
                     fasta_dir = None, gff_dir = None, gb_dir = None,
-                    prefix = "flanked", adjust_dir_fasta = False):
+                    prefix = "flanked", adjust_dir = False, adjust_dir_fasta = False,
+                    gff_supp = [], id_as_label = False, linked_features = [], unlinked_features = []):
     """
     Subsets GFF3 annotation by feature IDs, includes subfeatures.
     Extends feature range by 'flank' bp and subtracts the lower value of the extended range
@@ -33,11 +34,15 @@ def get_flanked_seq(ref, fids, flank = 200, feature_type = "gene",
         flank (int): number of bp to extend range
         feature_type (str): GFF3 feature type (default="gene")
         gff_subset (str): path to output subsetted GFF3 file (coordinates per original GFF3 file) (optional)
+        fasta_out (str): path to output FASTA file (write all subsetted sequences written to this single file) (optional)
         gff_out (str): path to output GFF3 file (coordinates per extracted sequence) (optional)
         fasta_dir (str): path to output FASTA directory (optional)
         gb_dir (str): path to output genbank directory (optional)
         prefix (str): prefix for files generated if gff_dir, fasta_dir, and/or gb_dir != None
+        adjust_dir (bool): set to True to reverse complement sequence for output of fasta_out, fasta_dir, and gb_dir files AND adjust direction and strand in gff_out
         adjust_dir_fasta (bool): set to True to write plus strand of genes
+        gff_supp (list): list of GFF class objects with additional features to be included if within range
+            (for adding annotations like modified bases)
     
     Returns:
         dict: dictionary of extended sequences (format: {<feature ID>: <extended seq>})
@@ -46,6 +51,17 @@ def get_flanked_seq(ref, fids, flank = 200, feature_type = "gene",
     ref.subset_annotation(*fids)
     if gff_subset is not None:
         ref.annotation.write(fout = gff_subset)
+    ## subset entries in gff_supp and add to reference annotation
+    supp_gff = GFF()
+    if gff_supp:
+        ## get ranges to subset within
+        ranges = {}
+        for entry in ref.annotation:
+            ranges[entry.molecule] = ranges.get(entry.molecule, []) + [(entry.start-flank, entry.end+flank)]
+        ranges = {chrom: ranges_union([r]) for chrom, r in ranges.items()}
+        ## subset
+        for gff in gff_supp:
+            supp_gff._data.extend(gff.get_in_range(ranges, output_list = True, index = False))
     ## extract sequences +
     ## generate GFF3 annotations with coordinates for extracted sequence
     new_gff = GFF()
@@ -54,31 +70,62 @@ def get_flanked_seq(ref, fids, flank = 200, feature_type = "gene",
     seq_output_adj = {}
     for fid in fids:
         entry = ref.annotated_feature(fid, feature_type = feature_type)
-        mol, start, end = entry.molecule, entry.start, entry.end
+        molecule, start, end = entry.molecule, entry.start, entry.end
         true_start = max(0, start-flank)
-        seq = ref[mol][true_start:end+flank]
+        seq = ref[molecule][true_start:end+flank]
         seq_output[fid] = seq
-        if (fasta_out or fasta_dir) and adjust_dir_fasta:
+        if adjust_dir or ((fasta_out or fasta_dir) and adjust_dir_fasta):
             seq_output_adj[fid] = seq.reverse_complement() if entry.strand == '-' else seq
-        entries = ref.annotation.subset(fid)
+        ## subset main GFF entries
+        entries = ref.annotation.subset(fid, subfeatures = True)
         sub_gff = GFF()
         for entry in entries:
             ## create new Annotation object
             new_entry = Annotation(entry.generate_str(fmt = "GFF3").split('\t'), new_gff)
             new_entry.start = entry.start - true_start
             new_entry.end = entry.end - true_start
+            if adjust_dir and entry.strand == '-':
+                new_start = new_entry.start
+                new_end = new_entry.end
+                new_entry.start = len(seq) - new_end
+                new_entry.end = len(seq) - new_start
+                new_entry.strand = '+'
             new_entry.seqid = fid
             sub_gff._data.append(new_entry)
             new_gff._data.append(new_entry)
+        ## subset supp_gff entries
+        supp_entries = supp_gff.subset(ranges = {molecule: [(true_start, end+flank)]})
+        for entry in supp_entries:
+            ## create new Annotation object
+            new_entry = Annotation(entry.generate_str(fmt = "GFF3").split('\t'), new_gff)
+            new_entry.start = entry.start - true_start
+            new_entry.end = entry.end - true_start
+            if adjust_dir and entry.strand == '-':
+                new_start = new_entry.start
+                new_end = new_entry.end
+                new_entry.start = len(seq) - new_end
+                new_entry.end = len(seq) - new_start
+                new_entry.strand = '+'
+            new_entry.seqid = fid
+            new_entry.attributes._data["Parent"] = [fid] ## this is required to link the annotation to the feature
+            new_entry.attributes._raw = new_entry.generate_str(standardise = True)
+            sub_gff._data.append(new_entry)
+            new_gff._data.append(new_entry)
+            ## add original entry to ref.annotation
+            ref.annotation._data.append(entry)
+        ## add to sub_gffs
         sub_gffs[fid] = sub_gff
+    ## write again, this time updated with gff_supp entries
+    if gff_subset is not None:
+        ref.annotation.write(fout = gff_subset)
     if gff_out is not None:
-        new_gff.write(fout = gff_out, seqs = seq_output)
+        new_gff.write(fout = gff_out, seqs = (seq_output_adj if adjust_dir else seq_output))
     if gff_dir is not None:
         Path(gff_dir).mkdir(parents = True, exist_ok = True)
         for fid, sub_gff in sub_gffs.items():
             sub_gff.write(fout = f"{gff_dir}/{prefix}_{fid}.gff3",
-                          seqs = {fid: seq_output[fid]})
-    seq_output_for_fasta = seq_output if not adjust_dir_fasta else seq_output_adj
+                          seqs = {fid: (seq_output_adj if adjust_dir else seq_output)[fid]})
+    seq_output_for_fasta = seq_output_adj if (adjust_dir or adjust_dir_fasta) else seq_output
     if fasta_out is not None:
         dict_to_fasta(seq_output_for_fasta, fasta_out)
     if fasta_dir is not None:
@@ -90,7 +137,10 @@ def get_flanked_seq(ref, fids, flank = 200, feature_type = "gene",
         for fid, sub_gff in sub_gffs.items():
             print(fid)
             with open(f"{gb_dir}/{prefix}_{fid}.gb", 'w+') as f:
-                f.write(make_genbank_for_gene(fid, seq_output[fid], sub_gff))
+                f.write(make_genbank_for_gene(fid, (seq_output_adj if adjust_dir else seq_output)[fid], sub_gff,
+                                              id_as_label = id_as_label,
+                                              linked_features = linked_features,
+                                              unlinked_features = unlinked_features))
     return seq_output
 
 # seqs_flanked = get_flanked_seq(bra3, bra_rnl_id, flank = 200, feature_type = "gene",
@@ -127,23 +177,26 @@ class GenBankFeature:
                    else [f"complement({r[0]+1}..{r[1]})" for r in ranges])
         return (sranges[0] if len(sranges) == 1
                 else f"join({','.join(sranges)})")
-    def format_entry(self):
+    def format_entry(self, id_as_label = False):
         lines = []
         lines.append( (' '*5) + self.type + (' '*(16-len(self.type))) + self.format_range())
         def make_line(key, value):
             lines.append((' '*21) + '/' + key + '=' +
                          (f'"{value}"' if isinstance(value, str) else str(value)))
         make_line("gene", self.gene)
-        if self.type == "mRNA":
-            ids = self.annotations[0].get_attr("ID", fmt = list)
-            if ids: make_line("product", ids[0])
-        elif self.type == "CDS":
+        if self.type == "CDS":
+            parents = self.annotations[0].get_attr("Parent")
             make_line("codon_start",
                       (min(self.annotations, key = lambda a:a.start) if self.plus
                        else max(self.annotations, key = lambda a:a.end)).phase)
-            make_line("product", self.annotations[0].get_attr("Parent")[0])
-            if self._seq:
-                make_line("translation", self.translate())
+            make_line("product", parents[0])
+            if id_as_label: make_line("label", parents[0])
+            if self._seq: make_line("translation", self.translate())
+        else:
+            ids = self.annotations[0].get_attr("ID", fmt = list)
+            if self.type == "mRNA":
+                if ids: make_line("product", ids[0])
+            if id_as_label and ids: make_line("label", ids[0])
         return '\n'.join(lines)
     def format_seq(self):
         output = ''
@@ -156,9 +209,13 @@ class GenBankFeature:
 
 ## only parses the following feature types: gene, mRNA, CDS
 ## also only works for EXACTLY ONE gene (1 gid). Any more or less, and the output may be unexpected
-def make_genbank_for_gene(gid, seq, gff):
+## linked_features and unlinked_features are for any other feature that should be included (e.g. UTR)
+##  linked_features is for features that should be joined (e.g. something like CDS) (in beta, no way to separate different features of the same type for now)
+##  unlinked_features is for features that are disjointed (e.g. modified bases)
+#### ignore ##  format: {<parent feature type>: [<feature type 1>, <feature type 2>]}
+def make_genbank_for_gene(gid, seq, gff, unlinked_features = [], linked_features = [], id_as_label = False):
     output = []
-    gff = gff.subset(feature_ids = [gid])
+    gff = gff.subset(feature_ids = [gid], subfeatures = True)
     ## header
     import datetime
     output.append("LOCUS" + ' '*7 + gid + (' '*(28-len(gid)-len(str(len(seq))))) +
@@ -168,14 +225,23 @@ def make_genbank_for_gene(gid, seq, gff):
     output.append("FEATURES")
     gene = [a for a in gff if a.type == "gene"]
     genbank_gene = GenBankFeature(gid, "gene", gene, parent = None, seq = seq)
-    output.append(genbank_gene.format_entry())
+    output.append(genbank_gene.format_entry(id_as_label = id_as_label))
     mrnas = [a for a in gff if a.type == "mRNA"]
     for mrna in mrnas:
-        output.append(GenBankFeature(gid, "mRNA", [mrna], parent = gid, seq = seq).format_entry())
+        output.append(GenBankFeature(gid, "mRNA", [mrna], parent = gid, seq = seq).format_entry(id_as_label = id_as_label))
         cds = gff.get_subfeatures(*mrna.get_attr("ID"), feature_types = ["CDS"])
         if cds:
             output.append(GenBankFeature(gid, "CDS", cds,
-                                         parent = mrna.get_attr("ID")[0], seq = seq).format_entry())
+                                         parent = mrna.get_attr("ID")[0], seq = seq).format_entry(id_as_label = id_as_label))
+    for feature_type in unlinked_features:
+        to_add = gff.get_features(feature_type, index = False)
+        if len(to_add) > 0:
+            for entry in to_add:
+                output.append(GenBankFeature(gid, feature_type, [entry], parent = gid, seq = seq).format_entry(id_as_label = id_as_label))
+    for feature_type in linked_features:
+        to_add = gff.get_features(feature_type, index = False)
+        if len(to_add) > 0:
+            output.append(GenBankFeature(gid, feature_type, to_add, parent = gid, seq = seq).format_entry(id_as_label = id_as_label))
     ## format sequence
     output.append("ORIGIN")
     output.append(genbank_gene.format_seq())
@@ -258,3 +324,88 @@ def make_genbank_for_gene(gid, seq, gff):
 #                                gff_dir = f"{dir_out}/RNL",
 #                                gb_dir = f"{dir_results}/gb_curated/RNL")
 
+
+# def get_flanked_seq_merge(ref, fids, flank = 200, feature_type = "gene",
+#                           gff_subset = None,
+#                           fasta_out = None, gff_out = None,
+#                           fasta_dir = None, gff_dir = None, gb_dir = None,
+#                           prefix = "flanked", adjust_dir_fasta = False):
+#     """
+#     Subsets GFF3 annotation by feature IDs, includes subfeatures.
+#     Extends feature range by 'flank' bp and merges all overlapping or bookended sequences.
+#     Subtracts the lower value of the extended range
+#     from all coordinates in feature itself + its subfeatures.
+#     Extracts extended sequences from FASTA file, named by feature ID.
+#     Writes gff3 subsetted from original to file (coordinates per original GFF3 file) if gff_subset != None.
+#     Writes gff3 w/ sequences (coordinates per extracted sequence) to file if gff_out != None.
+#     Writes sequences to file if fasta_out != None.
+#     Writes gff3 w/ sequence BY FEATURE ID if gff_dir != None (into {gff_dir}/{prefix}_{fid}.gff3).
+#     (Includes annotations of subfeatures)
+#     Writes FASTA format BY FEATURE ID if fasta_dir != None (into {fasta_dir}/{prefix}_{fid}.gff3).
+#     Writes GenBank format BY FEATURE ID if gb_dir != None (into {gb_dir}/{prefix}_{fid}.gff3).
+    
+#     Arguments:
+#         ref (AnnotatedFasta): AnnotatedFasta object
+#         fids (list/tuple): reusable iterable of feature IDs
+#         flank (int): number of bp to extend range
+#         feature_type (str): GFF3 feature type (default="gene")
+#         gff_subset (str): path to output subsetted GFF3 file (coordinates per original GFF3 file) (optional)
+#         gff_out (str): path to output GFF3 file (coordinates per extracted sequence) (optional)
+#         fasta_dir (str): path to output FASTA directory (optional)
+#         gb_dir (str): path to output genbank directory (optional)
+#         prefix (str): prefix for files generated if gff_dir, fasta_dir, and/or gb_dir != None
+#         adjust_dir_fasta (bool): set to True to write plus strand of genes
+    
+#     Returns:
+#         dict: dictionary of extended sequences (format: {<feature ID>: <extended seq>})
+#     """
+#     ## subset original GFF3 file
+#     ref.subset_annotation(*fids)
+#     if gff_subset is not None:
+#         ref.annotation.write(fout = gff_subset)
+#     ## extract sequences +
+#     ## generate GFF3 annotations with coordinates for extracted sequence
+#     new_gff = GFF()
+#     sub_gffs = {}
+#     seq_output = {}
+#     seq_output_adj = {}
+#     for fid in fids:
+#         entry = ref.annotated_feature(fid, feature_type = feature_type)
+#         mol, start, end = entry.molecule, entry.start, entry.end
+#         true_start = max(0, start-flank)
+#         seq = ref[mol][true_start:end+flank]
+#         seq_output[fid] = seq
+#         if (fasta_out or fasta_dir) and adjust_dir_fasta:
+#             seq_output_adj[fid] = seq.reverse_complement() if entry.strand == '-' else seq
+#         entries = ref.annotation.subset(fid)
+#         sub_gff = GFF()
+#         for entry in entries:
+#             ## create new Annotation object
+#             new_entry = Annotation(entry.generate_str(fmt = "GFF3").split('\t'), new_gff)
+#             new_entry.start = entry.start - true_start
+#             new_entry.end = entry.end - true_start
+#             new_entry.seqid = fid
+#             sub_gff._data.append(new_entry)
+#             new_gff._data.append(new_entry)
+#         sub_gffs[fid] = sub_gff
+#     if gff_out is not None:
+#         new_gff.write(fout = gff_out, seqs = seq_output)
+#     if gff_dir is not None:
+#         Path(gff_dir).mkdir(parents = True, exist_ok = True)
+#         for fid, sub_gff in sub_gffs.items():
+#             sub_gff.write(fout = f"{gff_dir}/{prefix}_{fid}.gff3",
+#                           seqs = {fid: seq_output[fid]})
+#     seq_output_for_fasta = seq_output if not adjust_dir_fasta else seq_output_adj
+#     if fasta_out is not None:
+#         dict_to_fasta(seq_output_for_fasta, fasta_out)
+#     if fasta_dir is not None:
+#         Path(fasta_dir).mkdir(parents = True, exist_ok = True)
+#         for seqid, seq in seq_output_for_fasta.items():
+#             dict_to_fasta({seqid: seq}, f"{fasta_dir}/{prefix}_{seqid}.fasta")
+#     if gb_dir is not None:
+#         Path(gb_dir).mkdir(parents = True, exist_ok = True)
+#         for fid, sub_gff in sub_gffs.items():
+#             print(fid)
+#             with open(f"{gb_dir}/{prefix}_{fid}.gb", 'w+') as f:
+#                 f.write(make_genbank_for_gene(fid, seq_output[fid], sub_gff))
+#     return seq_output

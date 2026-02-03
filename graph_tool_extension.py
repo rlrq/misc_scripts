@@ -7,6 +7,23 @@ import itertools
 import functools
 # import threading
 
+
+## Apx-MAF:
+## based on https://www.sciencedirect.com/science/article/pii/S0304397514008238
+## Parameterized and approximation algorithms for maximum agreement forest in multifurcating trees
+## 2015; Jianer Chen, Jia-Hao Fan, & Sing-Hoi Sze; Theoretical Computer Science. 562:496-512
+
+## TODO? Alg-MAF:
+## https://www.sciencedirect.com/science/article/pii/S0022000018302290
+## A parameterized algorithm for the Maximum Agreement Forest problem on multiple rooted multifurcating trees
+## 2018; Feng Shi, Jianer Chen, Qilong Feng, & Jianxin Wang; Journal of Computer and System Sciences. 97:28-44
+
+## TODO?
+## Relaxed Agreement Forests
+## https://arxiv.org/abs/2309.01110
+## 2023; Virginia Aardevol Martinez, Steven Chaplick, Steven Kelk, Ruben Meuwese, Matus Mihalak, & Georgios Stamoulis; arXiv
+
+
 # class Vertex(gt.Vertex):
 #     def __init__(self, *args, **kwargs):
 #         super().__init__(*args, **kwargs)
@@ -999,32 +1016,6 @@ def make_groups_scalar(g, *groups):
 
 
 
-#### for development, use these trees, which have some multifurcating subtrees
-import sys
-sys.path.append("/mnt/chaelab/rachelle/src")
-import newick_extension as ne
-import newick
-from Bio import SeqIO
-# import itertools
-import regex as re
-# import basics
-## ADR1-NRG1.col0-vdw-wlodzimierz.curated.pep.mafft.rooted.subtree-ADR1.nwk has an accession with 2 genes; one is nested within the other, keep the longer one
-nwk1 = "/mnt/chaelab/rachelle/nlr_survey/results/RNL/tree/ADR1-NRG1.col0-vdw-wlodzimierz.curated.pep.mafft.rooted.subtree-ADR1.nwk"
-## ADR1-NRG1.col0-vdw-wlodzimierz.curated.pep.mafft.rooted.subtree-ADR1-L2.nwk has genes with multiple splice variants; needs to be processed to select the longest variant per accession
-nwk2 = "/mnt/chaelab/rachelle/nlr_survey/results/RNL/tree/ADR1-NRG1.col0-vdw-wlodzimierz.curated.pep.mafft.rooted.subtree-ADR1-L2.nwk"
-## to select longest sequence, we need to know sequence lengths, so read in the alignment, drop gaps, get length
-aln = "/mnt/chaelab/rachelle/nlr_survey/results/RNL/aln/ADR1-NRG1.col0-vdw-wlodzimierz.curated.pep.mafft.fasta"
-seqlens = {rec.id: len(rec.seq.replace('-', '')) for rec in SeqIO.parse(aln, "fasta")}
-
-## some functions for assigning attributes + filtering
-get_gid = lambda seqid: re.search("(?<=\\|).+(?=\\|CDS\\|)", seqid).group(0)
-get_accid = lambda seqid: ("TAIR10" if "Col-0_ref" in seqid
-                           else re.search("(?<=Reference\\|)[^|]+", seqid).group(0) if re.search("\\d\\|G\\d", seqid)
-                           else re.search("(?<=Reference\\|).+(?=\\.g[-\\d]+?\\|CDS)", seqid).group(0))
-attr_map = {"seqlen": lambda n:seqlens[n.name],
-            "accid": lambda n:get_accid(n.name),
-            "gid": lambda n:get_gid(n.name)}
-
 ## convert to edge list (text file, format based on https://docs.oracle.com/en/database/oracle/property-graph/23.1/spgdg/edge-list-edge_list.html)
 def parse_if_non_numeric(v, f):
     try:
@@ -1061,6 +1052,33 @@ def edgelist_to_hashed_graph(fin, hash_id, graph_class = HashedGraph,
     g.set_vp_as_id(hash_id)
     return g
 
+
+
+#### for development, use these trees, which have some multifurcating subtrees
+import sys
+sys.path.append("/mnt/chaelab/rachelle/src")
+import newick_extension as ne
+import newick
+from Bio import SeqIO
+# import itertools
+import regex as re
+# import basics
+## ADR1-NRG1.col0-vdw-wlodzimierz.curated.pep.mafft.rooted.subtree-ADR1.nwk has an accession with 2 genes; one is nested within the other, keep the longer one
+nwk1 = "/mnt/chaelab/rachelle/nlr_survey/results/RNL/tree/ADR1-NRG1.col0-vdw-wlodzimierz.curated.pep.mafft.rooted.subtree-ADR1.nwk"
+## ADR1-NRG1.col0-vdw-wlodzimierz.curated.pep.mafft.rooted.subtree-ADR1-L2.nwk has genes with multiple splice variants; needs to be processed to select the longest variant per accession
+nwk2 = "/mnt/chaelab/rachelle/nlr_survey/results/RNL/tree/ADR1-NRG1.col0-vdw-wlodzimierz.curated.pep.mafft.rooted.subtree-ADR1-L2.nwk"
+## to select longest sequence, we need to know sequence lengths, so read in the alignment, drop gaps, get length
+aln = "/mnt/chaelab/rachelle/nlr_survey/results/RNL/aln/ADR1-NRG1.col0-vdw-wlodzimierz.curated.pep.mafft.fasta"
+seqlens = {rec.id: len(rec.seq.replace('-', '')) for rec in SeqIO.parse(aln, "fasta")}
+
+## some functions for assigning attributes + filtering
+get_gid = lambda seqid: re.search("(?<=\\|).+(?=\\|CDS\\|)", seqid).group(0)
+get_accid = lambda seqid: ("TAIR10" if "Col-0_ref" in seqid
+                           else re.search("(?<=Reference\\|)[^|]+", seqid).group(0) if re.search("\\d\\|G\\d", seqid)
+                           else re.search("(?<=Reference\\|).+(?=\\.g[-\\d]+?\\|CDS)", seqid).group(0))
+attr_map = {"seqlen": lambda n:seqlens[n.name],
+            "accid": lambda n:get_accid(n.name),
+            "gid": lambda n:get_gid(n.name)}
 
 v_attr_map = {
     "seqlen": lambda n:seqlens.get(n.name, ''),
@@ -1419,3 +1437,122 @@ class ParaMAFgraph(HashedGraph):
     #     if not executed: executed = self.meta_step_4(X) ## if all leaves are in same tree but no 2 are siblings
     #     ## return whether any meta-steps were executed (0/1)
     #     return executed
+
+
+
+
+
+#### for development, use these trees, which have some multifurcating subtrees
+import sys
+sys.path.append("/mnt/chaelab/rachelle/src")
+import newick_extension as ne
+import newick
+from Bio import SeqIO
+# import itertools
+import regex as re
+# import basics
+nwk1 = "/mnt/chaelab/rachelle/pav_haplotype/results/4050AB/tree/B5_SOC3_col0-js-arath63B5augustus20k-vdw.40A.pep.mafft.nwk"
+nwk2 = "/mnt/chaelab/rachelle/pav_haplotype/results/4050AB/tree/B5_SOC3_col0-js-arath63B5augustus20k-vdw.50A.pep.mafft.nwk"
+## to select longest sequence, we need to know sequence lengths, so read in the alignment, drop gaps, get length
+aln1 = "/mnt/chaelab/rachelle/pav_haplotype/results/4050AB/alignment/B5_SOC3_col0-js-arath63B5augustus20k-vdw.40A.pep.mafft.fasta"
+aln2 = "/mnt/chaelab/rachelle/pav_haplotype/results/4050AB/alignment/B5_SOC3_col0-js-arath63B5augustus20k-vdw.50A.pep.mafft.fasta"
+seqlens1 = {rec.id: len(rec.seq.replace('-', '')) for rec in SeqIO.parse(aln1, "fasta")}
+seqlens2 = {rec.id: len(rec.seq.replace('-', '')) for rec in SeqIO.parse(aln2, "fasta")}
+seqlens = {**seqlens1, **seqlens2}
+
+## some functions for assigning attributes + filtering
+get_gid = lambda seqid: re.search("(?<=\\|).+(?=\\|CDS\\|)", seqid).group(0)
+get_accid = lambda seqid: (
+    "TAIR10" if "Col-0_ref" in seqid
+    else "9550_G168" if "9550_G168" in seqid
+    else re.search("(?<=Reference\\|)[^|]+", seqid).group(0) if re.search("\\d\\|G\\d", seqid)
+    else re.search("^[^|]+", seqid).group(0) if "Reference" not in seqid
+    else re.search("(?<=Reference\\|AT)[^-]+", seqid).group(0))
+attr_map = {"seqlen": lambda n:seqlens[n.name],
+            "accid": lambda n:get_accid(n.name),
+            "gid": lambda n:get_gid(n.name)}
+
+v_attr_map = {
+    "seqlen": lambda n:seqlens.get(n.name, ''),
+    "accid": lambda n:parse_if_non_numeric(n.name, get_accid),
+    "gid": lambda n:parse_if_non_numeric(n.name, get_gid),
+    "leaf": lambda n:n.is_leaf# ,
+    # "collapsed_vertices": lambda n:[]
+}
+edgelist_kwargs = {
+    "v_label_function": lambda v:v.name,
+    "e_label_function": lambda src,dst:'',
+    "v_property_map": v_attr_map,
+    "e_property_map": {"length": lambda src,dst:dst.length}}
+v_property_coerce = {
+    "seqlen": lambda x:(-1 if x == '' else int(x)),
+    "accid": lambda x:(None if x == '' else x),
+    "gid": lambda x:(None if x == '' else x),
+    "leaf": lambda x:(True if (low:=x.lower())=="true" else False if low=="false" else None)}
+e_property_coerce = {
+    "length": lambda x:(float("NaN") if x == '' else float(x))}
+vcoll_attr_map = {
+    "seqlen": lambda g,v:-1,
+    "accid": lambda g,v:(';'.join(sorted(get_vprop_recursively(g, v, "accid")))),
+    "gid": lambda g,v:(';'.join(sorted(get_vprop_recursively(g, v, "gid")))),
+    "leaf": lambda g,v:True# ,
+    # "collapsed_vertices": lambda g,n:[]
+}
+ecoll_attr_map = {
+    "length": lambda g,e:-1
+}
+econt_attr_map = {
+    "length": lambda g,v:sum(g.ep["length"][e] for e in v.all_edges())
+}
+
+## read & process trees
+t1 = newick.read(nwk1)[0]
+t1.set_leaf_attributes(attr_map)
+t1.prune_leaves_by_group("accid", lambda leaves:max(leaves, key = lambda leaf:leaf.seqlen), in_place = True)
+t1.match = lambda n:n.accid
+t2 = newick.read(nwk2)[0]
+t2.set_leaf_attributes(attr_map)
+t2.prune_leaves_by_group("accid", lambda leaves:max(leaves, key = lambda leaf:leaf.seqlen), in_place = True)
+ne.prune_unique_leaves(t1, t2, match_function = lambda n:n.accid, in_place = True)
+t2.match = lambda n:n.accid
+
+## convert to edgelist
+tmp1 = "/mnt/chaelab/rachelle/tmp1.txt"
+tmp2 = "/mnt/chaelab/rachelle/tmp2.nwk"
+edgelist_1 = "/mnt/chaelab/rachelle/tmp/t1.edgelist"
+edgelist_2 = "/mnt/chaelab/rachelle/tmp/t2.edgelist"
+newick.write(t1, tmp1)
+newick.write(t2, tmp2)
+ne.newick_to_edgelist(tmp1, edgelist_1, **edgelist_kwargs)
+ne.newick_to_edgelist(tmp2, edgelist_2, **edgelist_kwargs)
+
+## read edgelist into graph-tool graph
+g1 = edgelist_to_hashed_graph(edgelist_1, "label", graph_class = AxpMAFgraph,
+                              v_property_coerce = v_property_coerce,
+                              e_property_coerce = e_property_coerce)
+g2 = edgelist_to_hashed_graph(edgelist_2, "label", graph_class = AxpMAFgraph,
+                              v_property_coerce = v_property_coerce,
+                              e_property_coerce = e_property_coerce)
+g0 = edgelist_to_hashed_graph(edgelist_1, "label", graph_class = AxpMAFgraph,
+                              v_property_coerce = v_property_coerce,
+                              e_property_coerce = e_property_coerce)
+
+
+## undirected
+g1.set_directed(False)
+g2.set_directed(False)
+
+# ## draw
+# g1.draw()
+# g2.draw()
+
+am_4050A = Apx_MAF(g1, g2, label_f1 = use_vcoll_id(lambda hv:hv.accid), label_f2 = use_vcoll_id(lambda hv:hv.accid))
+am_4050A[1:] ## (10, 30, 3) ## L-partitions, # meta step operations, # single-vertex trees removed, # bss shrunk
+g1.draw()
+g2.draw()
+tmp2 = [(g0.subset_hvertices(v.hi) if not v.is_vcoll else g0.subset_hvertices(*v.vcoll.vp_all("ids"))) for v in g1.hvertices()]
+g0.draw(vcolour = make_groups_scalar(g0, *tmp2))
+
+## reciprocal
+am_5040A = Apx_MAF(g2, g1, label_f1 = use_vcoll_id(lambda hv:hv.accid), label_f2 = use_vcoll_id(lambda hv:hv.accid))
+am_5040A[1:] ## (11, 31, 3)

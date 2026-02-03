@@ -1,6 +1,7 @@
 """Classes that integrate FASTA and GFF3 files for retrieval of feature sequences"""
 
 import sys
+sys.path.append("/mnt/chaelab/rachelle/src")
 sys.path.append("/mnt/chaelab/rachelle/scripts/minorgpy")
 
 import copy
@@ -33,13 +34,16 @@ from minorg.fasta import (
     collapse_identical_seqs
 )
 
-from minorg.annotation import Annotation, GFF# , subset_ann
-from minorg.index import IndexedFasta
+# from minorg.annotation import Annotation, GFF# , subset_ann
+# from minorg.index import IndexedFasta
 
 from minorg.display import (
     make_print_preindent,
     print_indent
 )
+
+from annotation import Annotation, GFF
+from index_fasta import IndexedFasta
 
 # ## test
 # gid = "AT3G44400"
@@ -77,20 +81,20 @@ class AnnotatedFeature(Annotation):
     
     Attributes:
         annotated_fasta (:class:`AnnotatedFasta`): parent :class:`AnnotatedFasta` object
-        annotation (:class:`minorg.annotation.GFF`): 
+        annotation (:class:`annotation.GFF`): 
     """
     def __init__(self, id, annotated_fasta, gff = None, rps_hits = None, feature_type = None):
         """
         Create an AnnotatedFeature object.
         
         Annotation data for feature and its subfeatures will be extracted from
-        either ``gff`` or ``annotated_fasta`` 's :attr:`minorg.reference.AnnotatedFasta.annotation` attribute.
+        either ``gff`` or ``annotated_fasta`` 's :attr:`reference.AnnotatedFasta.annotation` attribute.
         
         Arguments:
             id (str): required, ID of feature (typically gene name or isoform name)
             annotated_fasta (:class:`AnnotatedFasta`): required, :class:`AnnotatedFasta` object
-            gff (str or :class:`minorg.annotation.GFF`): optional, 
-                path to GFF file or :class:`minorg.annotation.GFF` object
+            gff (str or :class:`annotation.GFF`): optional, 
+                path to GFF file or :class:`annotation.GFF` object
             rps_hits (str): optional, path to RPS-BLAST output (outfmt 6, with header)
         """
         self.annotated_fasta = annotated_fasta
@@ -134,13 +138,13 @@ class AnnotatedFeature(Annotation):
 
     def copy_annotation(self) -> Annotation:
         """
-        Generate new :class:`minorg.annotation.Annotation` object with self's annotation data.
+        Generate new :class:`annotation.Annotation` object with self's annotation data.
         
         Used to make new Annotation for domains that will be modified with domain range.
         
         Returns
         -------
-        :class:`minorg.annotation.Annotation`
+        :class:`annotation.Annotation`
         """
         return Annotation(entry = self.generate_gff(), gff = self.annotation)
     
@@ -700,7 +704,7 @@ class AnnotatedFeature(Annotation):
                 domain_ann.start = start
                 domain_ann.end = end
                 domain_ann.type = "domain"
-                domain_ann.source = "minorg" if self.annotated_fasta.name is None else self.annotated_fasta.name
+                domain_ann.source = "reference_py" if self.annotated_fasta.name is None else self.annotated_fasta.name
                 domain_gff.add_entry(domain_ann, duplicate_check = True)
             if len(domain_gff) != 0:
                 domain_gff.write(domain_gff._fname, domain_gff._data, fmt = domain_gff._fmt)
@@ -721,17 +725,17 @@ class AnnotatedFasta(IndexedFasta):
         fasta (str): path to genome FASTA file
         _gff (str): path to GFF3 file
         gff (str): path to GFF3 file.
-            If :meth:`~minorg.reference.AnnotatedFasta.subset_annotation` has been called,
+            If :meth:`~reference.AnnotatedFasta.subset_annotation` has been called,
             this points to the file of subsetted annotations.
         genetic_code (str or int): NCBI genetic code
         attr_mod (dict): attribute modification 
         memsave (bool): whether to index GFF3 file instead of reading to memory
-        assembly (:class:`~minorg.reference.AnnotatedFasta`): self, stores parsed sequence data.
+        assembly (:class:`~reference.AnnotatedFasta`): self, stores parsed sequence data.
             As this class inherits from IndexedFasta,
             ``self.assembly`` provides an analogous way of retrieving sequence data 
             as ``self.annotation`` retrieves annotation data.
-        annotation (:class:`~minorg.annotation.GFF`): GFF object, stores parsed annotation data.
-            If :meth:`~minorg.reference.AnnotatedFasta.subset_annotation` has been called,
+        annotation (:class:`~annotation.GFF`): GFF object, stores parsed annotation data.
+            If :meth:`~reference.AnnotatedFasta.subset_annotation` has been called,
             this stores data of subsetted annotations.
         _annotated_features (dict): stores recently retrieved AnnotatedFeature objects
     """
@@ -770,7 +774,7 @@ class AnnotatedFasta(IndexedFasta):
         return f"AnnotatedFasta(name = {self.name}, fasta = {self.fasta}, gff = {self.gff})"
         
     def parse_gff(self) -> None:
-        """Parse GFF3 file stored :attr:`~minorg.reference.AnnotatedFasta.gff`"""
+        """Parse GFF3 file stored :attr:`~reference.AnnotatedFasta.gff`"""
         print_indent("Reading GFF file", overwrite = True)
         self.annotation = GFF(self.gff, attr_mod = self.attr_mod, memsave = self.memsave)
     
@@ -850,7 +854,7 @@ class AnnotatedFasta(IndexedFasta):
         
         Returns
         -------
-        :class:`minorg.annotation.Annotation`
+        :class:`annotation.Annotation`
             Annotation object of feature
         """
         annotated_feature = self._annotated_features.get(feature_id, None)

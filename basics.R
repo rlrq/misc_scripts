@@ -21,7 +21,7 @@ file_ext <- function(fname){
 ## function to save plots with default PDF+PNG being default formats
 save_plot_noDefaultDir <- function(fname, p, w = 9.91, h = 5.44, units = "in", fmt = NA,
                                    dir = NA, ...){
-    dir.create(dir, showWarnings = FALSE)
+    dir.create(dir, showWarnings = FALSE, recursive = TRUE)
     if(is.na(fmt)){
         if (file_ext(fname) != ''){
             print(h)
@@ -60,3 +60,9 @@ slapply <- function(v, f){
     }
     return(output)
 }
+
+extrafont::font_import(pattern = "Arial", prompt = FALSE)
+extrafont::loadfonts() ## required in chaelab-ws
+theme_set(theme_void(base_family = "Arial", base_size = 8))
+theme_set(theme_bw(base_family = "Arial", base_size = 8))
+update_geom_defaults("text", list(size = 8/.pt))

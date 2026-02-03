@@ -101,8 +101,8 @@ for inpt in ${INPT[@]}; do
     tmp=$(mktemp -p ${DIR} "${PREFIX}.XXX")
     if [ ${REMOVE_DUPLICATES} -eq 1 ]; then
         tmp2=$(mktemp -p ${DIR} "${PREFIX}.XXX")
-        grep '>' ${seed} | sed 's/^>//' > ${tmp2}
-        python3 -c "import sys; sys.path.append('/mnt/chaelab/rachelle/src'); from Bio import SeqIO; from data_manip import splitlines; from fasta_manip import dict_to_fasta, remove_gap_col; to_remove = set(splitlines('${tmp2}')); seqs = {record.description: record.seq for record in SeqIO.parse('${inpt}', 'fasta') if record.description not in to_remove}; seqs = seqs if len(set(len(seq) for seq in seqs.values()))!=1 else remove_gap_col(seqs); dict_to_fasta(seqs, '${tmp2}')"
+        grep '>' ${seed} | sed 's/^>//' | sed 's/ .\+$//' > ${tmp2}
+        python3 -c "import sys; sys.path.append('/mnt/chaelab/rachelle/src'); from Bio import SeqIO; from data_manip import splitlines; from fasta_manip import dict_to_fasta, remove_gap_col; to_remove = set(splitlines('${tmp2}')); seqs = {record.description: record.seq for record in SeqIO.parse('${inpt}', 'fasta') if record.id not in to_remove}; seqs = seqs if len(set(len(seq) for seq in seqs.values()))!=1 else remove_gap_col(seqs); dict_to_fasta(seqs, '${tmp2}')"
         inpt=${tmp2}
     fi
     ${ALN} ${ALN_ARGS} --add ${inpt} ${seed} > ${tmp}

@@ -1,7 +1,7 @@
 """GFF3 class"""
 
 import sys
-sys.path.append("/mnt/chaelab/rachelle/scripts/minorgpy")
+# sys.path.append("/mnt/chaelab/rachelle/scripts/minorgpy")
 sys.path.append("/mnt/chaelab/rachelle/src")
 
 import itertools
@@ -44,6 +44,43 @@ def print_indent(msg, lvl: int = 0, c: str = ' ', overwrite: bool = False):
 
 # from minorg.display import print_indent
 
+
+## parse_sep_dict and parse_attr_mod_sdict are copied from MINORg's parse_config.py
+def parse_sep_sdict(s: str, item_sep: str = ';', kv_sep = ':'):
+    '''
+    Converts raw '<key1><kv_sep><v1>,<v2>,...,<v5><item_sep><key2><kv_sep><v6>,...,<v9>' string into 
+    {'<key1>':'<v1>,<v2>,...,<v5>', '<key2>':'<v6>,...,<v9>'} dict.
+    '''
+    return dict( ( item.split(kv_sep)[0], kv_sep.join(item.split(kv_sep)[1:]) )
+                 for item in s.split(item_sep) if item )
+
+def parse_attr_mod_sdict(s: str, attr_sep: str = ',', feature_sep: str = ';', fa_sep: str = ':',
+                         alias_sep: str = '='):
+    """
+    Parse attribute modifications from string to dictionary.
+
+    Arguments:
+        s (str): required, string of attribute modifications in format
+            '<feature type>:<standard attribute field name>=<nonstandard attribute field name>,<standard attribute field name>=<nonstandard attribute field name>;<feature type>:<standard attribute field name>=<nonstandard attribute field name>'
+            (e.g. 'mRNA:Parent=Locus_id')
+        attr_sep (str): delimiter for attribute modifications of same feature type (default=',')
+        feature_sep (str): delimiter for feature types (default=';')
+        fa_sep (str): delimiter between feature type and attribute modifications (default=':')
+        alias_sep (str): delimiter between standard attribute field name and non-standard attribute field name
+            (default='=')
+
+    Returns
+    -------
+    dict
+        parsed attribute modifications in format
+            {<feature>: {<standard attribute field name>: <nonstandard attribute field name>}}
+    """
+    if not s: return {}
+    parse_attr_mod = lambda mappings: dict(mapping.split(alias_sep) for mapping in mappings.split(attr_sep))
+    feature_dict = parse_sep_sdict(s, kv_sep = fa_sep, item_sep = feature_sep)
+    return {feature: parse_attr_mod(mappings) for feature, mappings in feature_dict.items()}
+
+
 #################
 ##  GFF_MANIP  ##
 ##  (CLASSES)  ##
@@ -70,17 +107,17 @@ class GFF:
     Attributes:
         _fname (str): path to GFF3 file
         _fmt (str): GFF3 file format
-        _data (list): stores annotation data as list of :class:`minorg.annotation.Annotation` objects.
+        _data (list): stores annotation data as list of :class:`annotation.Annotation` objects.
             Not used if fname is not None but memsave=True.
         _string (str): stores raw string data if string!=None
         _attr_mod (dict): attribute modification mapping for non-standard attribute field names
         _attr_fields (dict): full attribute field name mapping
         _quiet (bool): print only essential messages
         _kwargs: stores additional arguments when parsing GFF3 entries 
-            to :class:`minorg.annotation.Annotation` objects
+            to :class:`annotation.Annotation` objects
         _seqids (dict): stores order of seqids/molecules/chromosomes
         _chunk_lines (int): number of lines between each stored position (used for indexing when memsave=True)
-        _indexed_file (:class:`minorg.index.IndexedFile`): indexed GFF file
+        _indexed_file (:class:`index.IndexedFile`): indexed GFF file
         _memsave (bool): index file instead of reading data to memory
     
     .. automethod:: __iter__
@@ -92,7 +129,7 @@ class GFF:
         
         Arguments:
             fname (str): optional, path to GFF3 file or BED file generated using gff2bed
-            data (list): optional, list of :class:`minorg.annotation.Annotation` objects
+            data (list): optional, list of :class:`annotation.Annotation` objects
             string (str): optional, string contents in the format of a GFF3 file or 
                 BED file generated using gff2bed
             attr_mod (dict): optional, dictionary of mapping for non-standard attribute field names
@@ -103,7 +140,7 @@ class GFF:
             memsave (bool): index file instead of reading data to memory
             chunk_lines (int): number of lines between each stored line index (default=1000)
             **kwargs: additional arguments when parsing GFF3 entries 
-                to :class:`minorg.annotation.Annotation` objects
+                to :class:`annotation.Annotation` objects
         """
         self._tmpfiles = []
         self._fname = fname
@@ -113,7 +150,7 @@ class GFF:
             self._infer_fmt()
         self._data = [] if data is None else data
         self._string = string
-        self._attr_mod = {} if attr_mod is None else attr_mod
+        self._attr_mod = {} if attr_mod is None else (attr_mod if isinstance(attr_mod, dict) else parse_attr_mod_sdict(attr_mod))
         self._attr_fields = {"all": {"ID": "ID", "Name": "Name", "Alias": "Alias", "Parent": "Parent",
                                      "Target": "Target", "Gap": "Gap", "Derives_from": "Derives_from",
                                      "Note": "Note", "Dbxref": "Dbxref", "Ontology_term": "Ontology_term",
@@ -150,7 +187,7 @@ class GFF:
         
         Yields
         ------
-        :class:`minorg.annotation.Annotation`
+        :class:`annotation.Annotation`
         """
         if self._data:
             for entry in self._data:
@@ -182,18 +219,18 @@ class GFF:
     
     def empty_copy(self, other = None) -> Union['GFF', None]:
         """
-        Shallow copy self's attributes (BUT NOT DATA) to another :class:`minorg.annotation.GFF` object.
+        Shallow copy self's attributes (BUT NOT DATA) to another :class:`annotation.GFF` object.
         
-        If ``other=None``, create new :class:`minorg.annotation.GFF` object, 
+        If ``other=None``, create new :class:`annotation.GFF` object, 
         copy attributes to it, and return the new object.
         
         Arguments:
-            other (:class:`minorg.annotation.GFF`): optional.
-                If not provided, creates a new :class:`minorg.annotation.GFF` object with copied attributes.
+            other (:class:`annotation.GFF`): optional.
+                If not provided, creates a new :class:`annotation.GFF` object with copied attributes.
         
         Returns
         -------
-        :class:`minorg.annotation.GFF`
+        :class:`annotation.GFF`
             If ``other=None``
         """
         if other:
@@ -246,7 +283,7 @@ class GFF:
     
     def make_annotation_from_str_gen(self, strip_newline = True) -> Callable[[str], 'Annotation']:
         """
-        Create function to parse raw string entries into :class:`minorg.annotation.Annotation` objects 
+        Create function to parse raw string entries into :class:`annotation.Annotation` objects 
         based on inferred data format (GFF3 or BED generated by gff2bed)
         
         Arguments:
@@ -416,10 +453,10 @@ class GFF:
     
     def add_entry(self, gff_entry, duplicate_check = False) -> None:
         """
-        Add :class:`minorg.annotation.Annotation` object to self's data at self._data.
+        Add :class:`annotation.Annotation` object to self's data at self._data.
         
         Arguments:
-            gff_entry (:class:`~minorg.annotation.Annotation`): required, Annotation object to add
+            gff_entry (:class:`~annotation.Annotation`): required, Annotation object to add
             duplicate_check (bool): check for duplicates and only add ``gff_entry`` if not already in data
         """
         if duplicate_check:
@@ -471,7 +508,7 @@ class GFF:
         Returns
         -------
         list
-            Of :class:`minorg.annotation.Annotation` objects if index=False
+            Of :class:`annotation.Annotation` objects if index=False
         list
             Of int line number of entries if index=True
         """
@@ -488,12 +525,12 @@ class GFF:
         Arguments:
             *feature_ids (list): list of feature IDs
             feature_types (str): feature type(s) to retain
-            index (bool): return line number of feature instead of :class:`minorg.annotation.Annotation` objects
+            index (bool): return line number of feature instead of :class:`annotation.Annotation` objects
         
         Returns
         -------
         list
-            Of :class:`minorg.annotation.Annotation` objects if index=False
+            Of :class:`annotation.Annotation` objects if index=False
         list
             Of int line number of entries if index=True
         """
@@ -516,13 +553,13 @@ class GFF:
         Arguments:
             *feature_ids (str): parent feature IDs
             feature_types (list of str): GFF3 feature type(s) to retrieve
-            index (bool): return line number of feature instead of :class:`minorg.annotation.Annotation` objects
+            index (bool): return line number of feature instead of :class:`annotation.Annotation` objects
             preserve_order (bool): sort output by line number (preserve original order)
         
         Returns
         -------
         list
-            Of :class:`minorg.annotation.Annotation` objects if index=False
+            Of :class:`annotation.Annotation` objects if index=False
         list
             Of int line number of entries if index=True
         """
@@ -562,14 +599,14 @@ class GFF:
         
         Arguments:
             feature_ids (str): parent feature IDs
-            index (bool): return line number of feature instead of :class:`minorg.annotation.Annotation` objects
+            index (bool): return line number of feature instead of :class:`annotation.Annotation` objects
             full (bool): return feature(s) as well as its/their subfeatures
             preserve_order (bool): sort output by line number (i.e. preserve original order)
         
         Returns
         -------
         list
-            Of :class:`minorg.annotation.Annotation` objects if index=False
+            Of :class:`annotation.Annotation` objects if index=False
         list
             Of int line number of entries if index=True
         """
@@ -603,7 +640,7 @@ class GFF:
         None
             If ``output_list=False`` and the specified line does not exist
         """
-        lines = self._indexed_file.get_line(*indices, strip_newline = strip_newline, output_fmt = list)
+        lines = self._indexed_file.get_line(*indices, strip_newline = strip_newline, as_list = True)
         if len(indices) == 1 and not output_list:
             if lines: return lines[0]
             else: return None
@@ -611,7 +648,7 @@ class GFF:
     
     def get_i(self, *indices, output_list = False, sort = True) -> Union[list, 'Annotation', None]:
         """
-        Get :class:`~minorg.annotation.Annotation` of GFF entry/entries by line index.
+        Get :class:`~annotation.Annotation` of GFF entry/entries by line index.
         
         Arguments:
             indices (int): line number(s) (indices) of entries to retrieve
@@ -621,8 +658,8 @@ class GFF:
         Returns
         -------
         list
-            Of :class:`~minorg.annotation.Annotation` if ``output_list=True`` or multiple indices were requested
-        :class:`~minorg.annotation.Annotation`
+            Of :class:`~annotation.Annotation` if ``output_list=True`` or multiple indices were requested
+        :class:`~annotation.Annotation`
             If ``output_list=False`` and only one index was requested
         None
             If ``output_list=False`` and the specified line does not exist
@@ -632,7 +669,7 @@ class GFF:
         if self._data:
             output = [self._data[i] for i in indices]
         elif self.is_indexed():
-            raw_entries = self.get_i_raw(*indices, strip_newline = True)
+            raw_entries = self.get_i_raw(*indices, strip_newline = True, output_list = True)
             ## newline already stripped by get_i_raw. No need to strip them again.
             mk_annotation = self.make_annotation_from_str_gen(strip_newline = False)
             output = [mk_annotation(entry) for entry in raw_entries]
@@ -647,12 +684,12 @@ class GFF:
         ## if even if output_list is only used when len(indices) == 1 or == 0 AND type(feature_ids) is str.
         ##  Always returns list otherwise.
         """
-        Get :class:`~minorg.annotation.Annotation` of GFF entry/entries by feature ID.
+        Get :class:`~annotation.Annotation` of GFF entry/entries by feature ID.
         
         Arguments:
             *feature_ids (str): feature ID(s)
             index (bool): return line number(s) of feature(s) 
-                instead of :class:`minorg.annotation.Annotation` object(s)
+                instead of :class:`annotation.Annotation` object(s)
             output_list (bool): return list even if ony one feature ID is provided
             preserve_order (bool): sort output by line number (preserve original order)
         
@@ -660,9 +697,9 @@ class GFF:
         -------
         list
             If ``output_list=True`` or more than one feature ID was provided.
-            List of :class:`minorg.annotation.Annotation` objects if ``index=False``.
+            List of :class:`annotation.Annotation` objects if ``index=False``.
             List of int if ``index=True``.
-        :class:`~minorg.annotation.Annotation`
+        :class:`~annotation.Annotation`
             If ``output_list=False`` and only one feature ID was provided and ``index=False``
         int
             If ``output_list=False`` and only one feature ID was provided and ``index=True``
@@ -681,24 +718,74 @@ class GFF:
         elif index: return indices
         else: return self.get_i(*indices, sort = preserve_order, output_list = True)
     
-    def subset(self, feature_ids = None, feature_types = None, subfeatures = True, preserve_order = True):
+    def get_in_range(self, ranges, index = False, output_list = False, preserve_order = True):
+        """
+        Get :class:`~annotation.Annotation` of GFF entry/entries within range.
+        
+        Arguments:
+            ranges (dict): ranges in format
+                {'<molecule>': [(<start 0-index, inclusive>, <end 0-index, exclusive>), (<start>,<end>), ...]}
+        
+        Returns
+        -------
+        list
+            If ``output_list=True`` or more than one feature ID was provided.
+            List of :class:`annotation.Annotation` objects if ``index=False``.
+            List of int if ``index=True``.
+        :class:`~annotation.Annotation`
+            If ``output_list=False`` and only one feature ID was provided and ``index=False``
+        int
+            If ``output_list=False`` and only one feature ID was provided and ``index=True``
+        None
+            If ``output_list=False`` and no feature with the specified feature ID can be found
+        """
+        def is_in_range(entry):
+            if entry.molecule not in ranges:
+                return False
+            for r in ranges[entry.molecule]:
+                if entry.start >= r[0] and entry.end <= r[1]:
+                    return True
+            return False
+        indices = [i for i, entry in enumerate(self) if is_in_range(entry)]
+        if not output_list and len(indices) <= 1:
+            if not indices: return None
+            elif index: return indices[0]
+            else: return self.get_i(*indices, output_list = False)
+        elif index: return indices
+        else: return self.get_i(*indices, sort = preserve_order, output_list = True)
+    
+    def subset(self, feature_ids = None, feature_types = None, ranges = None, subfeatures = True, preserve_order = True):
         """
         Subset data by feature ID (feature_ids) and/or feature type (feature_types)
         and generate new GFF object from them.
         
         Arguments:
+            feature_ids (list)
+            feature_types (list)
+            ranges (dict)
+            subfeatures (bool)
+            preserve_order (bool)
         
+        Returns
+        -------
+        :class:`annotation.GFF`
         """
         new_gff = self.empty_copy()
         ## start subsetting
-        if feature_ids:
+        if ranges:
+            ## prioritise range first. the smaller # of entries should make subsequent features searches faster
+            new_gff._data = self.get_in_range(ranges, index = False, output_list = True,
+                                              preserve_order = preserve_order)
+            return new_gff.subset(feature_ids = feature_ids, feature_types = feature_types,
+                                  subfeatures = subfeatures, preserve_order = preserve_order)
+        elif feature_ids:
             if isinstance(feature_ids, str):
                 feature_ids = [feature_ids]
             if subfeatures:
                 indices = self.get_features_and_subfeatures(*feature_ids, index = True)
             else:
                 indices = self.get_id(*feature_ids, index = True, output_list = True)
-            new_gff._data = self.get_i(*indices, sort = preserve_order)
+            new_gff._data = self.get_i(*indices, sort = preserve_order, output_list = True)
             if feature_types:
                 return new_gff.subset(feature_types = feature_types)
             else:
@@ -706,7 +793,7 @@ class GFF:
         elif feature_types:
             if isinstance(feature_types, str):
                 feature_types = [feature_types]
-            data = self.get_features(*feature_types, index = False)
+            data = self.get_features(*feature_types, index = False, output_list = True)
             new_gff._data = data
             if sort:
                 new_gff.sort()
@@ -821,9 +908,9 @@ class Annotation:
             raise e
         self.feature = entry[2]
         self.type = entry[2]
-        self.start = int(entry[3]) - 1
+        self.start = int(entry[3]) - 1 ## 0-indexed start
         # self.start0 = self.start ## 0-indexed start
-        self.end = int(entry[4])
+        self.end = int(entry[4]) ## exclusive end
         self.score = entry[5] if entry[5] == '.' else float(entry[5])
         self.strand = entry[6]
         self.phase = entry[7] if entry[7] == '.' else int(entry[7])
@@ -847,11 +934,11 @@ class Annotation:
     def generate_attr(self, original = True, fields = None):
         if original: return self.attributes._raw
         else: return self.attributes.standardise_fields()
-    def generate_str(self, fmt = "GFF"):
+    def generate_str(self, fmt = "GFF", **kwargs):
         if fmt.upper() in {"GFF", "GFF3"}:
-            output = self.generate_gff()
+            output = self.generate_gff(**kwargs)
         elif fmt.upper() in {"BED"}:
-            output = self.generate_bed()
+            output = self.generate_bed(**kwargs)
         return '\t'.join(map(str, output))
     def generate_gff(self, standardise = False):
         return list(map(str, [self.seqid, self.source, self.type, self.start + 1, self.end,
