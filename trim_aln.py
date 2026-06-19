@@ -31,7 +31,7 @@ def remove_column(aln, gap_freq = 1, gap_char = '-'):
     output = {}
     for i in range(aln_len):
         if i in progress_increment:
-            print(f"Processing position {i} of {num_seq}")
+            print(f"Processing position {i} of {aln_len}")
         col = tuple(aln[seq_id][i] for seq_id in seq_ids)
         if (len([c for c in col if c == gap_char])/num_seq <= gap_freq):
             for i, seq_id in enumerate(seq_ids):

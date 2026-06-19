@@ -38,6 +38,7 @@ def subset_hmm(fin, fout, names = '', accs = '', accs_v = '', exclude = ''):
             if field == "NAME ":
                 name = line[6:-1]
                 entry.append(line)
+                continue
             ## if at 'ACC' attribute, check if this is an entry we want to keep
             elif field == "ACC  ":
                 acc = line[6:-1]

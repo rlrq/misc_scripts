@@ -792,3 +792,40 @@ class Attributes:
 #             if feature_mod != field: return feature_mod
 #             else: return get_recursively(self._gff._attr_fields_inv, field, "all", field)
 #         return ';'.join([f"{get_mod(k)}={'.'.join(v)}" for k, v in self._data.items()])
+
+## anns is a list of Annotation features that were concatenated to obtain a sequence, which chrom and pos are referencing
+def concat_feature_pos_to_genomic(anns, pos, transcript_revcomp = False):
+    if transcript_revcomp:
+        return concat_feature_pos_to_genomic_minus(anns, pos)
+    else:
+        return concat_feature_pos_to_genomic_plus(anns, pos)
+
+def concat_feature_pos_to_genomic_plus(anns, pos):
+    anns = sorted(anns, key = lambda ann:ann.start)
+    for ann in anns:
+        ann_len = ann.end - ann.start
+        if ann_len <= pos:
+            pos -= ann_len
+        else:
+            return ann.start + pos
+    return
+
+def concat_feature_pos_to_genomic_minus(anns, pos):
+    anns = sorted(anns, key = lambda ann:-ann.end)
+    for ann in anns:
+        ann_len = ann.end - ann.start
+        if ann_len <= pos:
+            pos -= ann_len
+        else:
+            return ann.end - pos - 1
+    return
+
+## start and end are inclusive
+def concat_feature_range_to_genomic_seq(ifasta, anns, start, end, transcript_revcomp = False):
+    start = concat_feature_pos_to_genomic(anns, start, transcript_revcomp = transcript_revcomp)
+    end = concat_feature_pos_to_genomic(anns, end, transcript_revcomp = transcript_revcomp)
+    chrom = anns[0].molecule
+    if transcript_revcomp:
+        return ifasta[chrom][end:start+1]
+    else:
+        return ifasta[chrom][start:end+1]

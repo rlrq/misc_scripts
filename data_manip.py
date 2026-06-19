@@ -35,7 +35,7 @@ def make_custom_get(header, parse_num = True):
             return output[0] if (len(output) == 1 and not return_list) else output
     return helper
 
-def parse_get_data(fname, delim = '\t', detect = True, parse_num = True):
+def parse_get_data(fname, delim = '\t', detect = True, parse_num = True, exclude_header_prefix = None):
     if detect:
         ext = fname.split('.')[-1]
         if ext == "csv":
@@ -45,7 +45,10 @@ def parse_get_data(fname, delim = '\t', detect = True, parse_num = True):
     # data = [(''.join([c for c in line if c != '\n'])).split(delim)
     #         for line in open(fname, 'r').readlines()]
     data = [line.split(delim) for line in splitlines(fname)]
-    get = make_custom_get(data[0], parse_num = parse_num)
+    if exclude_header_prefix is None:
+        get = make_custom_get(data[0], parse_num = parse_num)
+    else:
+        get = make_custom_get('\t'.join(data[0]).replace(exclude_header_prefix, '', 1).split('\t'), parse_num = parse_num)
     return get, data[1:]
 
 def extend_get(get_f, extension):
@@ -68,8 +71,11 @@ def filter_dict(d, keys):
     return {k: v for k, v in d.items() if k in keys}
 
 def write_delim(fname, dat, delim = '\t', coerce = True):
-    open(fname, "w+").write('\n'.join([delim.join([str(x) if coerce else x for x in line])
-                                       for line in dat]) + '\n')
+    # open(fname, "w+").write('\n'.join([delim.join([str(x) if coerce else x for x in line])
+    #                                    for line in dat]) + '\n')
+    with open(fname, "w+") as f:
+        for line in dat:
+            _ = f.write(delim.join([str(x) if coerce else x for x in line]) + '\n')
     return
 
 def sort_get_multi(iterable, get, *cols): ## the order is important!

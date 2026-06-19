@@ -20,8 +20,8 @@ up_range = args.up
 down_range = args.down
 
 print("Reading GFF3 file")
-with open("/mnt/chaelab/shared/genomes/TAIR10/features/TAIR10_GFF3_genes.gff", 'r') as f:
-# with open(args.gff, 'r') as f:
+# with open("/mnt/chaelab/shared/genomes/TAIR10/features/TAIR10_GFF3_genes.gff", 'r') as f:
+with open(args.gff, 'r') as f:
     ## get mRNA entries and group by gene
     mrna_entries = {}
     for entry in f:
@@ -67,7 +67,7 @@ if not args.separate:
             merged_ranges = rm.ranges_union([list(mrna_dat.values())])
             ## range should be converted to 0-index for BED output
             for r in merged_ranges:
-                _ = f.write('\t'.join(map(str, [chrom, max(0, r[0]-1), r[1], f"{gene}_TSS_region",
+                _ = f.write('\t'.join(map(str, [chrom, max(0, r[0]-1), max(1, r[1]), f"{gene}_TSS_region",
                                                 '.', strand, source, "TSS_region", '.',
                                                 f"Gene={gene}"])) + '\n')
 else:
@@ -81,7 +81,7 @@ else:
             strand = base_entry[6]
             ## range should be converted to 0-index for BED output
             for mrna_id, tss_range in mrna_dat.items():
-                _ = f.write('\t'.join(map(str, [chrom, max(0, tss_range[0]-1), tss_range[1],
+                _ = f.write('\t'.join(map(str, [chrom, max(0, tss_range[0]-1), max(1, tss_range[1]),
                                                 f"{mrna_id}_TSS_region",
                                                 '.', strand, source, "TSS_region", '.',
                                                 f"mRNA={mrna_id};Gene={gene}"])) + '\n')

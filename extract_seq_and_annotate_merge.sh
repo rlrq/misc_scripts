@@ -163,9 +163,9 @@ fi
 ## intersect extended range with GFF
 tmp_gffext=$(mktemp_f)
 if [ ${SORT} -eq 0 ]; then
-    bedtools intersect -a ${tmp_bedext} -b ${GFF} -wb | awk '$3!="chromosome"' > ${tmp_gffext}
+    bedtools intersect -a ${tmp_bedext} -b ${GFF} -wb | awk '$6!="chromosome"' > ${tmp_gffext}
 else
-    bedtools intersect -a ${tmp_bedext} -b ${GFF} -wb -sorted | awk '$3!="chromosome"' > ${tmp_gffext}
+    bedtools intersect -a ${tmp_bedext} -b ${GFF} -wb -sorted | awk '$6!="chromosome"' > ${tmp_gffext}
 fi
 
 ## subset GFF for final set of features
@@ -193,7 +193,7 @@ awk 'BEGIN {FS="\t"; OFS="\t"} {print $1,$7-1,$8}' ${tmp_gffext} >> ${tmp_bedext
 tmp_bedext2=$(mktemp_f)
 sort -k1,1 -k2,2n ${tmp_bedext} | bedtools merge -i stdin |
     awk -v f=${FLANK_BP} 'BEGIN {FS="\t"; OFS="\t"} {if($2-f<0)$2=f; print $1,$2-f,$3+f,$1":"$2+1-f".."$3+f}' > ${tmp_bedext2}
-if [ -n ${BED_OUT} ]; then
+if [ -n "${BED_OUT}" ]; then
     mv ${tmp_bedext2} ${BED_OUT}
     tmp_bedext2=${BED_OUT}
 fi

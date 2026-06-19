@@ -126,7 +126,7 @@ function subset_self() {
     local f_pattern=$(mktemp -p ${dir_self} self.pattern.XXXXXX)
     ## TODO: grep -fF file with ID=<fid> first, then do the Perl thing.
     sort ${fid} | uniq | ## remove duplicates
-        perl -pe 's/(?=[\@#\$%\\\/|\[\]()])/\\/g' | ## escape special characters @#$%\/|[]()
+        perl -pe 's/(?=[\.\@#\$%\\\/|\[\]()])/\\/g' | ## escape special characters @#$%\/|[]()
         awk -v chunk=${CHUNK} '{ print } NR % chunk == 0 { print "##" }' | ## split by "chunks"
         tr '\n' '|' | ## concat IDs with '|'
         sed 's/|##|/\n/g' | ## replace chunk separator with newline
@@ -139,6 +139,7 @@ function subset_self() {
     else
         printf '\n' >> ${f_pattern}
         while IFS= read -r line; do
+            echo "here!"
             grep -nP "${line}" ${gff} >> ${fout}
         done < ${f_pattern}
     fi
@@ -172,8 +173,9 @@ function subset_parent() {
     fi
     cut -f9 ${gff_self} | ## extract attributes column
         grep -oP '(?<=^Parent=|;Parent=)[^;]+' | ## get PARENT attribute
+        tr ',' '\n' | ## split if multiple parents
         sort | uniq | ## remove duplicates
-        perl -pe 's/(?=[\@#\$%\\\/|\[\]()])/\\/g' | ## escape special characters @#$%\/|[]()
+        perl -pe 's/(?=[\.\@#\$%\\\/|\[\]()])/\\/g' | ## escape special characters @#$%\/|[]()
         awk -v chunk=${CHUNK} '{ print } NR % chunk == 0 { print "##" }' | ## split by "chunks"
         tr '\n' '|' | ## concat IDs with '|'
         sed 's/|##|/\n/g' | ## replace chunk separator with newline
@@ -217,12 +219,12 @@ function subset_child() {
     echo "dir_child: ${dir_child}"
     local f_pattern=$(mktemp -p ${dir_child} child.pattern.XXXXXX)
     sort ${fid} | uniq | ## remove duplicates
-        perl -pe 's/(?=[\@#\$%\\\/|\[\]()])/\\/g' | ## escape special characters @#$%\/|[]()
+        perl -pe 's/(?=[\.\@#\$%\\\/|\[\]()])/\\/g' | ## escape special characters @#$%\/|[]()
         awk -v chunk=${CHUNK} '{ print } NR % chunk == 0 { print "##" }' | ## split by "chunks"
         tr '\n' '|' | ## concat IDs with '|'
         sed 's/|##|/\n/g' | ## replace chunk separator with newline
-        sed 's/^/^([^\\t]+\\t){8}(Parent=|[^\\t]+;Parent=)(/' | ## there must be 8 tab-separated columns before Parent=XXX
-        sed 's/|*$/)(;|$)/' > ${f_pattern} ## remove trailing '|', ID must end with either EOL or ';'
+        sed 's/^/^([^\\t]+\\t){8}(Parent=|[^\\t]+;Parent=)(|[^;]+?,)(/' | ## there must be 8 tab-separated columns before Parent=XXX
+        sed 's/|*$/)(|,[^;]+?)(;|$)/' > ${f_pattern} ## remove trailing '|', ID must end with either EOL or ';'
     ## check if no patterns. If no patterns, create empty output file
     local n_pattern=$(grep '(' ${f_pattern} | wc -l)
     if [ ${n_pattern} -eq 0 ]; then
@@ -358,9 +360,11 @@ function subset_descendants() {
         attribute_from_gff ${gff_tmp} ${fid_current} ID
         ## sort current fids and check for new IDs
         sort -o ${fid_current} ${fid_current}
+        sort -o ${fid_descendant_parents} ${fid_descendant_parents}
         comm -3 -1 ${fid_descendant_parents} ${fid_current} > ${fid_new}
         ## append new child feature IDs to IDs of descendants
-        cat ${fid_new} >> ${fid_descendant_parents}
+        cat ${fid_descendant_parents} ${fid_new} |
+            sort -o ${fid_descendant_parents}
         ## update seed (this really only does anything at the first iteration)
         fid_seed=${fid_new}
     done
